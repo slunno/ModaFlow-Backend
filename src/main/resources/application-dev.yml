@@ -1,9 +1,10 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/modaflow_db
-    username: postgres
-    password: postgrespassword
-    driver-class-name: org.postgresql.Driver
+    # Conexão com Microsoft SQL Server (SQL Server Management Studio - SSMS)
+    url: jdbc:sqlserver://localhost:1433;databaseName=modaflow_db;encrypt=true;trustServerCertificate=true;
+    username: sa
+    password: YourStrongPassword123
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
 
   jpa:
     hibernate:
@@ -12,7 +13,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+        dialect: org.hibernate.dialect.SQLServerDialect
 
 springdoc:
   api-docs:
