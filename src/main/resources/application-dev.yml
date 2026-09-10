@@ -1,10 +1,14 @@
 spring:
   datasource:
-    # Conexão com Microsoft SQL Server (SQL Server Management Studio - SSMS)
-    url: jdbc:sqlserver://localhost:1433;databaseName=modaflow_db;encrypt=true;trustServerCertificate=true;
+    url: jdbc:h2:mem:modaflow_db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     username: sa
-    password: YourStrongPassword123
-    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+    password: ""
+    driver-class-name: org.h2.Driver
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
 
   jpa:
     hibernate:
@@ -13,7 +17,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.SQLServerDialect
+        dialect: org.hibernate.dialect.H2Dialect
 
 springdoc:
   api-docs:

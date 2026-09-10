@@ -18,18 +18,17 @@ import org.springframework.web.bind.annotation.*;
 /**
  * CONTROLLER: PecaController
  * ENDPOINT BASE: /pecas
- * DESCRIÇÃO: Operações de Peças de vestuário (listagem com múltiplos filtros paginados, CRUD e movimentação de etapa).
  */
 @RestController
 @RequestMapping("/pecas")
-@Tag(name = "Peças", description = "Endpoints de gerenciamento de peças de vestuário e ficha técnica")
+@Tag(name = "Peças", description = "Endpoints de gerenciamento de peças de vestuário")
 public class PecaController {
 
     @Autowired
     private PecaService pecaService;
 
     @GetMapping
-    @Operation(summary = "Listar peças paginadas com suporte a múltiplos filtros dinâmicos")
+    @Operation(summary = "Listar peças paginadas com filtros dinâmicos")
     public ResponseEntity<Page<PecaResponseDTO>> listarComFiltros(Pageable pageable) {
         return ResponseEntity.ok(pecaService.listarComFiltros(pageable));
     }
@@ -52,7 +51,7 @@ public class PecaController {
         return ResponseEntity.ok(pecaService.atualizar(id, request));
     }
 
-    @PATCH("/{id}/etapa")
+    @PatchMapping("/{id}/etapa")
     @Operation(summary = "Mover peça para uma nova etapa do fluxo produtivo")
     public ResponseEntity<PecaResponseDTO> moverEtapa(@PathVariable Long id, @RequestParam EtapaPecaEnum novaEtapa) {
         return ResponseEntity.ok(pecaService.moverEtapa(id, novaEtapa));

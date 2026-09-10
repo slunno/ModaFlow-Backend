@@ -17,8 +17,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * ============================================================================
  * CONFIGURAÇÃO: SecurityConfig
  * DESCRIÇÃO: Define a cadeia de segurança do Spring Security, desabilitando CSRF (stateless JWT),
- *            configurando política de sessão STATELESS, liberando Swagger e endpoints de Auth,
- *            e encadeando os filtros JwtAuthenticationFilter e TenantInterceptorFilter.
+ *            configurando política de sessão STATELESS, liberando Swagger e endpoints de Auth/Usuários.
  * ============================================================================
  */
 @Configuration
@@ -35,9 +34,10 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
+            .headers(headers -> headers.frameOptions(frame -> frame.disable()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/auth/login", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                .requestMatchers("/auth/**", "/usuarios/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/h2-console/**").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

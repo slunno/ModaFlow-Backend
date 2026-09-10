@@ -17,7 +17,6 @@ import java.util.List;
 /**
  * CONTROLLER: UsuarioController
  * ENDPOINT BASE: /usuarios
- * DESCRIÇÃO: Operações de listagem, cadastro, edição e alteração de status de acesso de usuários.
  */
 @RestController
 @RequestMapping("/usuarios")
@@ -51,7 +50,7 @@ public class UsuarioController {
         return ResponseEntity.ok(usuarioService.atualizar(id, request));
     }
 
-    @PATCH("/{id}/acesso")
+    @PatchMapping("/{id}/acesso")
     @Operation(summary = "Bloquear ou ativar acesso do usuário")
     public ResponseEntity<Void> alternarAcesso(@PathVariable Long id, @RequestParam boolean ativo) {
         usuarioService.alternarStatusAcesso(id, ativo);

@@ -14,7 +14,6 @@ import java.util.List;
 /**
  * CONTROLLER: KanbanController
  * ENDPOINT BASE: /kanban
- * DESCRIÇÃO: Operações de visualização em colunas por etapa e movimentação drag-and-drop no Kanban.
  */
 @RestController
 @RequestMapping("/kanban")
@@ -25,13 +24,13 @@ public class KanbanController {
     private KanbanService kanbanService;
 
     @GetMapping
-    @Operation(summary = "Obter todas as peças ativas agrupadas para montagem do quadro Kanban")
+    @Operation(summary = "Obter todas as peças ativas agrupadas para o quadro Kanban")
     public ResponseEntity<List<PecaKanbanResponseDTO>> obterPecasDoKanban() {
         return ResponseEntity.ok(kanbanService.obterPecasDoKanban());
     }
 
-    @PATCH("/pecas/{id}/etapa")
-    @Operation(summary = "Mover peça no quadro Kanban para uma nova coluna/etapa")
+    @PatchMapping("/pecas/{id}/etapa")
+    @Operation(summary = "Mover peça no Kanban para uma nova coluna/etapa")
     public ResponseEntity<Void> moverPecaNoKanban(@PathVariable Long id, @RequestParam EtapaPecaEnum novaEtapa) {
         kanbanService.moverPecaNoKanban(id, novaEtapa);
         return ResponseEntity.noContent().build();
