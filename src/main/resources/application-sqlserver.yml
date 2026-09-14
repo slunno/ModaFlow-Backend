@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:sqlserver://192.168.1.3:1433;databaseName=HOMOLOGACAO_COBRANCA;encrypt=false;trustServerCertificate=true;}
+    username: ${SPRING_DATASOURCE_USERNAME:nathan.henrique}
+    password: ${SPRING_DATASOURCE_PASSWORD:king@123}
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.SQLServerDialect
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
