@@ -1,5 +1,7 @@
 package com.modaflow.backend.security;
 
+import com.modaflow.backend.marca.Marca;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

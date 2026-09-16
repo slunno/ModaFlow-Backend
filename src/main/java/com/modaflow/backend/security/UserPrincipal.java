@@ -1,6 +1,6 @@
 package com.modaflow.backend.security;
 
-import com.modaflow.backend.entity.Usuario;
+import com.modaflow.backend.usuario.Usuario;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
