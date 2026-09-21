@@ -39,13 +39,13 @@ public class LinxIntegrationController {
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "50") int size,
         @RequestParam(required = false) String search,
-        @RequestParam(required = false) String griffe,
-        @RequestParam(required = false) String colecao,
-        @RequestParam(required = false) String tipo,
+        @RequestParam(required = false) List<String> griffe,
+        @RequestParam(required = false) List<String> colecao,
+        @RequestParam(required = false) List<String> tipo,
         @RequestParam(required = false) String material,
-        @RequestParam(required = false) EtapaPecaEnum etapa,
-        @RequestParam(required = false) LinxStatusPecaFiltro statusPeca,
-        @RequestParam(required = false) StatusColecaoEnum statusColecao
+        @RequestParam(required = false) List<EtapaPecaEnum> etapa,
+        @RequestParam(required = false) List<LinxStatusPecaFiltro> statusPeca,
+        @RequestParam(required = false) List<StatusColecaoEnum> statusColecao
     ) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
@@ -67,7 +67,7 @@ public class LinxIntegrationController {
 
     @GetMapping("/colecoes-validas")
     public ResponseEntity<List<LinxColecaoValidaResponseDTO>> getColecoesValidas(
-        @RequestParam(required = false) String griffe,
+        @RequestParam(required = false) List<String> griffe,
         @RequestParam(required = false) String search
     ) {
         return ResponseEntity.ok(service().getColecoesValidas(griffe, search));

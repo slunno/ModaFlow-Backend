@@ -263,7 +263,7 @@ class LinxIntegrationServiceTest {
             .contains("P.SUBGRUPO_PRODUTO", "dbo.MATERIAIS AS MF")
             .doesNotContain("P.TIPO_PRODUTO")
             .doesNotContain("C.GRIFFE = P.GRIFFE");
-        assertThat(parameters.getValue().getValue("tipo")).isEqualTo("BERMUDA");
+        assertThat(parameters.getValue().getValue("tipos")).isEqualTo(List.of("BERMUDA"));
         assertThat(parameters.getValue().getValue("material")).isEqualTo("%CETIM\\_100\\%%");
     }
 
@@ -308,9 +308,9 @@ class LinxIntegrationServiceTest {
             null,
             null,
             null,
-            EtapaPecaEnum.GERACAO_FICHA,
-            null,
-            null
+            List.of(EtapaPecaEnum.GERACAO_FICHA),
+            List.of(),
+            List.of()
         );
 
         assertThat(result.items()).isEmpty();

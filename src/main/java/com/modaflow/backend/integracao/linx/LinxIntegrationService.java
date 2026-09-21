@@ -6,6 +6,7 @@ import com.modaflow.backend.integracao.linx.config.LinxDatabaseClient;
 import com.modaflow.backend.peca.EtapaPecaEnum;
 import com.modaflow.backend.peca.Peca;
 import com.modaflow.backend.peca.PecaRepository;
+import com.modaflow.backend.peca.StatusPecaEnum;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -132,7 +133,16 @@ public class LinxIntegrationService {
         String material
     ) {
         return getProdutosValidos(
-            page, size, search, griffe, colecao, tipo, material, null, null, null
+            page,
+            size,
+            search,
+            singletonOrEmpty(griffe),
+            singletonOrEmpty(colecao),
+            singletonOrEmpty(tipo),
+            material,
+            List.of(),
+            List.of(),
+            List.of()
         );
     }
 
@@ -144,31 +154,33 @@ public class LinxIntegrationService {
         int page,
         int size,
         String search,
-        String griffe,
-        String colecao,
-        String tipo,
+        List<String> griffes,
+        List<String> colecoes,
+        List<String> tipos,
         String material,
-        EtapaPecaEnum etapa,
-        LinxStatusPecaFiltro statusPeca,
-        StatusColecaoEnum statusColecao
+        List<EtapaPecaEnum> etapas,
+        List<LinxStatusPecaFiltro> statusPecas,
+        List<StatusColecaoEnum> statusColecoes
     ) {
         LinxConnectionInfoDTO connection = requireExpectedDatabase();
-        String griffeFilter = normalizeGriffeFilter(griffe);
+        List<String> griffeFilters = normalizeGriffeFilters(griffes);
         String searchFilter = blankToNull(search);
-        String colecaoFilter = blankToNull(colecao);
-        String tipoFilter = blankToNull(tipo);
+        List<String> colecaoFilters = normalizeTextFilters(colecoes);
+        List<String> tipoFilters = normalizeTextFilters(tipos).stream()
+            .map(value -> value.toUpperCase(Locale.ROOT))
+            .toList();
         String materialFilter = blankToNull(material);
 
         StringBuilder filters = new StringBuilder(PRODUTOS_VALIDOS_FROM_WHERE);
         MapSqlParameterSource params = new MapSqlParameterSource();
 
-        if (griffeFilter != null) {
-            filters.append(" AND P.GRIFFE = :griffe");
-            params.addValue("griffe", griffeFilter);
+        if (!griffeFilters.isEmpty()) {
+            filters.append(" AND RTRIM(LTRIM(P.GRIFFE)) IN (:griffes)");
+            params.addValue("griffes", griffeFilters);
         }
-        if (colecaoFilter != null) {
-            filters.append(" AND P.COLECAO = :colecao");
-            params.addValue("colecao", colecaoFilter);
+        if (!colecaoFilters.isEmpty()) {
+            filters.append(" AND RTRIM(LTRIM(P.COLECAO)) IN (:colecoes)");
+            params.addValue("colecoes", colecaoFilters);
         }
         if (searchFilter != null) {
             filters.append("""
@@ -183,9 +195,9 @@ public class LinxIntegrationService {
             params.addValue("search", "%" + escaped + "%");
             params.addValue("searchCode", "%" + escapeLike(normalizedCode) + "%");
         }
-        if (tipoFilter != null) {
-            filters.append(" AND UPPER(RTRIM(LTRIM(P.SUBGRUPO_PRODUTO))) = :tipo");
-            params.addValue("tipo", tipoFilter.toUpperCase(Locale.ROOT));
+        if (!tipoFilters.isEmpty()) {
+            filters.append(" AND UPPER(RTRIM(LTRIM(P.SUBGRUPO_PRODUTO))) IN (:tipos)");
+            params.addValue("tipos", tipoFilters);
         }
         if (materialFilter != null) {
             filters.append("""
@@ -206,13 +218,15 @@ public class LinxIntegrationService {
             );
         }
 
-        boolean hasWorkflowFilter = etapa != null || statusPeca != null || statusColecao != null;
+        boolean hasWorkflowFilter = !safeList(etapas).isEmpty()
+            || !safeList(statusPecas).isEmpty()
+            || !safeList(statusColecoes).isEmpty();
         long totalElements;
         String workflowPageFilter = "";
         String pagination;
 
         if (hasWorkflowFilter) {
-            Set<String> workflowCodes = findWorkflowProductCodes(etapa, statusPeca, statusColecao);
+            Set<String> workflowCodes = findWorkflowProductCodes(etapas, statusPecas, statusColecoes);
             if (workflowCodes.isEmpty()) {
                 return emptyPage(page, size, connection.banco());
             }
@@ -312,16 +326,16 @@ public class LinxIntegrationService {
     }
 
     /** Retorna coleções que contêm pelo menos um produto elegível. */
-    public List<LinxColecaoValidaResponseDTO> getColecoesValidas(String griffe, String search) {
+    public List<LinxColecaoValidaResponseDTO> getColecoesValidas(List<String> griffes, String search) {
         requireExpectedDatabase();
-        String griffeFilter = normalizeGriffeFilter(griffe);
+        List<String> griffeFilters = normalizeGriffeFilters(griffes);
         String searchFilter = blankToNull(search);
         StringBuilder filters = new StringBuilder(PRODUTOS_VALIDOS_FROM_WHERE);
         MapSqlParameterSource params = new MapSqlParameterSource();
 
-        if (griffeFilter != null) {
-            filters.append(" AND P.GRIFFE = :griffe");
-            params.addValue("griffe", griffeFilter);
+        if (!griffeFilters.isEmpty()) {
+            filters.append(" AND RTRIM(LTRIM(P.GRIFFE)) IN (:griffes)");
+            params.addValue("griffes", griffeFilters);
         }
         if (searchFilter != null) {
             filters.append("""
@@ -483,22 +497,24 @@ public class LinxIntegrationService {
     }
 
     private Set<String> findWorkflowProductCodes(
-        EtapaPecaEnum etapa,
-        LinxStatusPecaFiltro statusPeca,
-        StatusColecaoEnum statusColecao
+        List<EtapaPecaEnum> etapas,
+        List<LinxStatusPecaFiltro> statusPecas,
+        List<StatusColecaoEnum> statusColecoes
     ) {
         Specification<Peca> specification = (root, query, criteriaBuilder) -> {
             List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
-            if (etapa != null) {
-                predicates.add(criteriaBuilder.equal(root.get("etapaAtual"), etapa));
+            if (!safeList(etapas).isEmpty()) {
+                predicates.add(root.get("etapaAtual").in(safeList(etapas)));
             }
-            if (statusPeca != null) {
-                predicates.add(root.get("status").in(statusPeca.statuses()));
+            if (!safeList(statusPecas).isEmpty()) {
+                Set<StatusPecaEnum> statuses = new HashSet<>();
+                for (LinxStatusPecaFiltro statusPeca : safeList(statusPecas)) {
+                    statuses.addAll(statusPeca.statuses());
+                }
+                predicates.add(root.get("status").in(statuses));
             }
-            if (statusColecao != null) {
-                predicates.add(
-                    criteriaBuilder.equal(root.get("colecao").get("status"), statusColecao)
-                );
+            if (!safeList(statusColecoes).isEmpty()) {
+                predicates.add(root.get("colecao").get("status").in(safeList(statusColecoes)));
             }
             return criteriaBuilder.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
         };
@@ -554,19 +570,34 @@ public class LinxIntegrationService {
         return pages > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) pages;
     }
 
-    private String normalizeGriffeFilter(String griffe) {
-        String value = blankToNull(griffe);
-        if (value == null) {
-            return null;
-        }
-        return switch (value.toUpperCase(Locale.ROOT).replaceAll("\\s+", "")) {
-            case "K&JBLACK" -> "K&J BLACK";
-            case "KING&JOE" -> "KING&JOE";
-            case "KING&JOEPLAY" -> "KING&JOE PLAY";
-            default -> throw new BusinessRuleException(
-                "Griffe inválida. Use K&J BLACK, KING&JOE ou KING&JOE PLAY."
-            );
-        };
+    private List<String> normalizeGriffeFilters(List<String> griffes) {
+        return normalizeTextFilters(griffes).stream()
+            .map(value -> switch (value.toUpperCase(Locale.ROOT).replaceAll("\\s+", "")) {
+                case "K&JBLACK" -> "K&J BLACK";
+                case "KING&JOE" -> "KING&JOE";
+                case "KING&JOEPLAY" -> "KING&JOE PLAY";
+                default -> throw new BusinessRuleException(
+                    "Griffe inválida. Use K&J BLACK, KING&JOE ou KING&JOE PLAY."
+                );
+            })
+            .distinct()
+            .toList();
+    }
+
+    private List<String> normalizeTextFilters(List<String> values) {
+        return safeList(values).stream()
+            .map(this::blankToNull)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+    }
+
+    private <T> List<T> singletonOrEmpty(T value) {
+        return value == null ? List.of() : List.of(value);
+    }
+
+    private <T> List<T> safeList(List<T> values) {
+        return values == null ? List.of() : values;
     }
 
     private String blankToNull(String value) {
