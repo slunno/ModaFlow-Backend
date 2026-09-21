@@ -2,6 +2,8 @@ package com.modaflow.backend.integracao.linx;
 
 import com.modaflow.backend.common.exception.BusinessRuleException;
 import com.modaflow.backend.integracao.linx.config.LinxDatabaseClient;
+import com.modaflow.backend.peca.PecaRepository;
+import com.modaflow.backend.peca.EtapaPecaEnum;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -11,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.sql.ResultSet;
@@ -37,12 +40,15 @@ class LinxIntegrationServiceTest {
     @Mock
     private NamedParameterJdbcTemplate jdbc;
 
+    @Mock
+    private PecaRepository pecaRepository;
+
     private LinxIntegrationService service;
 
     @BeforeEach
     void setUp() {
         when(databaseClient.jdbc()).thenReturn(jdbc);
-        service = spy(new LinxIntegrationService(databaseClient));
+        service = spy(new LinxIntegrationService(databaseClient, pecaRepository));
     }
 
     @Test
@@ -285,6 +291,31 @@ class LinxIntegrationServiceTest {
             "GRUPO_PRODUTO = 'ROUPAS'",
             "ISNULL(INATIVO, 0) = 0"
         );
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void retornaPaginaVaziaQuandoFiltroOperacionalNaoEncontraCodigoNoModaFlow() {
+        doReturn(connectionInfo("HOMOLOGACAO_COBRANCA", true, List.of()))
+            .when(service).getConnectionInfo();
+        when(pecaRepository.findAll(any(Specification.class))).thenReturn(List.of());
+
+        LinxProdutosValidosPageResponseDTO result = service.getProdutosValidos(
+            0,
+            50,
+            null,
+            null,
+            null,
+            null,
+            null,
+            EtapaPecaEnum.GERACAO_FICHA,
+            null,
+            null
+        );
+
+        assertThat(result.items()).isEmpty();
+        assertThat(result.totalElements()).isZero();
+        assertThat(result.sourceDatabase()).isEqualTo("HOMOLOGACAO_COBRANCA");
     }
 
     private LinxConnectionInfoDTO connectionInfo(

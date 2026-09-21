@@ -140,6 +140,20 @@ $env:MODAFLOW_LINX_DATASOURCE_USERNAME="<usuario_sql>"
 $env:MODAFLOW_LINX_DATASOURCE_PASSWORD="<senha>"
 ```
 
+Para não perder essas configurações ao fechar o PowerShell, copie
+`.env.local.example` para `.env.local`, preencha os valores locais e inicie o
+backend a partir desta pasta. O Spring carrega o arquivo automaticamente e o
+Git ignora `.env.local`:
+
+```powershell
+Copy-Item .env.local.example .env.local
+mvn spring-boot:run
+```
+
+O frontend deve permanecer em outro PowerShell com `npm run dev`. Durante o
+desenvolvimento, o Vite encaminha `/api/*` para `http://localhost:8080`; uma
+mensagem `ECONNREFUSED` significa que o backend não está ouvindo nessa porta.
+
 O datasource JPA principal (`spring.datasource`) deve continuar apontando para
 o banco próprio do ModaFlow ou para o H2 no perfil `dev`; ele não deve apontar
 para o schema Linx, pois existem nomes de tabelas coincidentes.

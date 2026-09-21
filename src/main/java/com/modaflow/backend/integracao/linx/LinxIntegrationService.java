@@ -1,16 +1,24 @@
 package com.modaflow.backend.integracao.linx;
 
 import com.modaflow.backend.common.exception.BusinessRuleException;
+import com.modaflow.backend.colecao.StatusColecaoEnum;
 import com.modaflow.backend.integracao.linx.config.LinxDatabaseClient;
+import com.modaflow.backend.peca.EtapaPecaEnum;
+import com.modaflow.backend.peca.Peca;
+import com.modaflow.backend.peca.PecaRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Consultas nativas, parametrizadas e exclusivamente de leitura no Linx.
@@ -75,10 +83,15 @@ public class LinxIntegrationService {
 
     private final LinxDatabaseClient databaseClient;
     private final NamedParameterJdbcTemplate jdbc;
+    private final PecaRepository pecaRepository;
 
-    public LinxIntegrationService(LinxDatabaseClient databaseClient) {
+    public LinxIntegrationService(
+        LinxDatabaseClient databaseClient,
+        PecaRepository pecaRepository
+    ) {
         this.databaseClient = databaseClient;
         this.jdbc = databaseClient.jdbc();
+        this.pecaRepository = pecaRepository;
     }
 
     /** Informa o banco e audita as permissões efetivas da credencial SQL. */
@@ -117,6 +130,27 @@ public class LinxIntegrationService {
         String colecao,
         String tipo,
         String material
+    ) {
+        return getProdutosValidos(
+            page, size, search, griffe, colecao, tipo, material, null, null, null
+        );
+    }
+
+    /**
+     * Cruza os filtros operacionais do ModaFlow com a fonte oficial do Linx.
+     * Os códigos são validados no Linx antes de integrarem a página retornada.
+     */
+    public LinxProdutosValidosPageResponseDTO getProdutosValidos(
+        int page,
+        int size,
+        String search,
+        String griffe,
+        String colecao,
+        String tipo,
+        String material,
+        EtapaPecaEnum etapa,
+        LinxStatusPecaFiltro statusPeca,
+        StatusColecaoEnum statusColecao
     ) {
         LinxConnectionInfoDTO connection = requireExpectedDatabase();
         String griffeFilter = normalizeGriffeFilter(griffe);
@@ -172,11 +206,56 @@ public class LinxIntegrationService {
             );
         }
 
-        Long count = jdbc.queryForObject("SELECT COUNT_BIG(*) " + filters, params, Long.class);
-        long totalElements = count == null ? 0 : count;
-        long offset = (long) page * size;
-        params.addValue("offset", offset);
-        params.addValue("size", size);
+        boolean hasWorkflowFilter = etapa != null || statusPeca != null || statusColecao != null;
+        long totalElements;
+        String workflowPageFilter = "";
+        String pagination;
+
+        if (hasWorkflowFilter) {
+            Set<String> workflowCodes = findWorkflowProductCodes(etapa, statusPeca, statusColecao);
+            if (workflowCodes.isEmpty()) {
+                return emptyPage(page, size, connection.banco());
+            }
+
+            String keysSql = """
+                SELECT
+                    P.ID,
+                    REPLACE(REPLACE(UPPER(RTRIM(LTRIM(P.PRODUTO))), '.', ''), ' ', '') AS CODIGO_NORMALIZADO
+                """ + filters + """
+                 ORDER BY P.GRIFFE, P.COLECAO, P.PRODUTO, P.ID
+                """;
+            List<LinxProductKey> matchingKeys = jdbc.query(
+                keysSql,
+                params,
+                (rs, rowNum) -> new LinxProductKey(
+                    nullableLong(rs, "ID"),
+                    clean(rs.getString("CODIGO_NORMALIZADO"))
+                )
+            ).stream()
+                .filter(key -> key.id() != null && workflowCodes.contains(key.normalizedCode()))
+                .toList();
+
+            totalElements = matchingKeys.size();
+            long fromIndexLong = (long) page * size;
+            if (fromIndexLong >= totalElements) {
+                return emptyPage(page, size, connection.banco(), totalElements);
+            }
+            int fromIndex = Math.toIntExact(fromIndexLong);
+            int toIndex = (int) Math.min(fromIndexLong + size, totalElements);
+            List<Long> pageIds = matchingKeys.subList(fromIndex, toIndex).stream()
+                .map(LinxProductKey::id)
+                .toList();
+            params.addValue("workflowPageIds", pageIds);
+            workflowPageFilter = " AND P.ID IN (:workflowPageIds)";
+            pagination = "";
+        } else {
+            Long count = jdbc.queryForObject("SELECT COUNT_BIG(*) " + filters, params, Long.class);
+            totalElements = count == null ? 0 : count;
+            long offset = (long) page * size;
+            params.addValue("offset", offset);
+            params.addValue("size", size);
+            pagination = " OFFSET :offset ROWS FETCH NEXT :size ROWS ONLY";
+        }
 
         String dataSql = """
             SELECT
@@ -213,10 +292,9 @@ public class LinxIntegrationService {
                 P.DATA_INICIO_DESENVOLVIMENTO,
                 P.CUSTO_REPOSICAO1,
                 P.PRECO_REPOSICAO_1
-            """ + filters + """
+            """ + filters + workflowPageFilter + """
              ORDER BY P.GRIFFE, P.COLECAO, P.PRODUTO, P.ID
-             OFFSET :offset ROWS FETCH NEXT :size ROWS ONLY
-            """;
+            """ + pagination;
 
         List<LinxProdutoValidoResponseDTO> items = jdbc.query(dataSql, params, this::mapProdutoValido);
         int totalPages = calculateTotalPages(totalElements, size);
@@ -404,6 +482,70 @@ public class LinxIntegrationService {
         );
     }
 
+    private Set<String> findWorkflowProductCodes(
+        EtapaPecaEnum etapa,
+        LinxStatusPecaFiltro statusPeca,
+        StatusColecaoEnum statusColecao
+    ) {
+        Specification<Peca> specification = (root, query, criteriaBuilder) -> {
+            List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+            if (etapa != null) {
+                predicates.add(criteriaBuilder.equal(root.get("etapaAtual"), etapa));
+            }
+            if (statusPeca != null) {
+                predicates.add(root.get("status").in(statusPeca.statuses()));
+            }
+            if (statusColecao != null) {
+                predicates.add(
+                    criteriaBuilder.equal(root.get("colecao").get("status"), statusColecao)
+                );
+            }
+            return criteriaBuilder.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
+        };
+
+        Set<String> codes = new HashSet<>();
+        for (Peca peca : pecaRepository.findAll(specification)) {
+            String normalized = normalizeProductCode(peca.getCodigo());
+            if (normalized != null) {
+                codes.add(normalized);
+            }
+        }
+        return codes;
+    }
+
+    private LinxProdutosValidosPageResponseDTO emptyPage(
+        int page,
+        int size,
+        String sourceDatabase
+    ) {
+        return emptyPage(page, size, sourceDatabase, 0);
+    }
+
+    private LinxProdutosValidosPageResponseDTO emptyPage(
+        int page,
+        int size,
+        String sourceDatabase,
+        long totalElements
+    ) {
+        return new LinxProdutosValidosPageResponseDTO(
+            List.of(),
+            page,
+            size,
+            totalElements,
+            calculateTotalPages(totalElements, size),
+            false,
+            sourceDatabase,
+            true
+        );
+    }
+
+    private String normalizeProductCode(String value) {
+        String cleanValue = clean(value);
+        return cleanValue == null
+            ? null
+            : cleanValue.toUpperCase(Locale.ROOT).replace(".", "").replaceAll("\\s+", "");
+    }
+
     private int calculateTotalPages(long totalElements, int size) {
         if (totalElements == 0) {
             return 0;
@@ -454,5 +596,8 @@ public class LinxIntegrationService {
     }
 
     private record ConnectionIdentity(String server, String database) {
+    }
+
+    private record LinxProductKey(Long id, String normalizedCode) {
     }
 }

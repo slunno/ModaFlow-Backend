@@ -8,6 +8,10 @@ package com.modaflow.backend.peca;
  * ============================================================================
  */
 public enum StatusPecaEnum {
+    /** Ainda não iniciou o fluxo técnico. */
+    A_DESENHAR,
+    /** Fluxo finalizado no ModaFlow. */
+    COMPLETA,
     /** Em fase de criação e ajustes */
     EM_DESENVOLVIMENTO,
     /** Aprovada para produção industrial */
