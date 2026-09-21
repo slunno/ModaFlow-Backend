@@ -10,6 +10,19 @@ server:
     context-path: /api/v1
 
 modaflow:
+  linx:
+    enabled: ${MODAFLOW_LINX_ENABLED:false}
+    # Aceita a conta administrativa informada, mas a integração continua expondo
+    # apenas consultas e valida DB_NAME() = HOMOLOGACAO_COBRANCA antes de usá-la.
+    allow-write-capable-credential: ${MODAFLOW_LINX_ALLOW_WRITE_CAPABLE_CREDENTIAL:true}
+    datasource:
+      url: ${MODAFLOW_LINX_DATASOURCE_URL:}
+      username: ${MODAFLOW_LINX_DATASOURCE_USERNAME:}
+      password: ${MODAFLOW_LINX_DATASOURCE_PASSWORD:}
+      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+      maximum-pool-size: 3
+      minimum-idle: 0
+      connection-timeout-ms: 10000
   jwt:
     secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
     expiration-ms: 86400000 # 24 horas

@@ -94,6 +94,66 @@ Como o ModaFlow PLM gerencia múltiplas marcas do grupo AKR BRANDS (*King & Joe,
 | **Dashboard** | `/api/v1/dashboard/graficos` | `GET` | Dados agregados para gráficos de BI |
 | **Kanban** | `/api/v1/kanban` | `GET` | Peças agrupadas para o quadro de 23 etapas |
 | **Kanban** | `/api/v1/kanban/pecas/{id}/etapa` | `PATCH` | Atualizar etapa via drag-and-drop |
+| **Linx** | `/api/v1/linx/conexao` | `GET` | Confirmar banco e permissões da conexão Linx |
+| **Linx** | `/api/v1/linx/produtos-validos` | `GET` | Listar produtos Linx ativos, vinculados a coleções, com paginação |
+| **Linx** | `/api/v1/linx/colecoes-validas` | `GET` | Listar coleções que possuem produtos elegíveis |
+
+---
+
+## Integração somente leitura com o Linx
+
+A integração Linx usa um pool JDBC separado do JPA principal. Isso impede que
+as entidades e os repositórios graváveis do ModaFlow sejam direcionados por
+engano às tabelas nativas do Linx.
+
+Regras atuais de elegibilidade:
+
+- o produto existe e está ativo em `dbo.PRODUTOS`;
+- possui vínculo direto com `dbo.COLECOES` por `PRODUTOS.COLECAO = COLECOES.COLECAO`;
+- a coleção está ativa;
+- `PRODUTOS.GRIFFE` é `K&J BLACK`, `KING&JOE` ou `KING&JOE PLAY`;
+- status do produto, datas e `COLECOES.GRIFFE` não são usados para excluir peças.
+
+O catálogo é deliberadamente organizacional: um usuário autenticado consulta as
+três griffes autorizadas, e o cabeçalho `X-Marca-Id` não reduz esse conjunto.
+Essa decisão atende à tela consolidada solicitada para King & Joe, K&J Black e
+King & Joe Play.
+
+A API executa somente consultas parametrizadas, usa o pool Linx em modo
+`readOnly` e audita as permissões efetivas em `PRODUTOS`, `COLECOES`,
+`MATERIAIS`, `PRODUTOS_SUBGRUPO`, `PRODUTOS_LINHAS`, `PRODUTOS_TAMANHOS` e
+`PRODUTOS_CATEGORIA`. Por padrão deste projeto, uma credencial com permissões de
+escrita pode ser usada, mas nenhum endpoint expõe uma operação de escrita.
+Defina `MODAFLOW_LINX_ALLOW_WRITE_CAPABLE_CREDENTIAL=false` para voltar a exigir
+uma credencial exclusiva com `SELECT`.
+
+O destino é fixo no código: antes de qualquer consulta de catálogo, `DB_NAME()`
+deve ser exatamente `HOMOLOGACAO_COBRANCA`. Uma conexão para outro banco é
+bloqueada mesmo que a URL ou outra propriedade tente indicar um destino diferente.
+
+Variáveis necessárias (não salve senhas no repositório):
+
+```powershell
+$env:MODAFLOW_LINX_ENABLED="true"
+$env:MODAFLOW_LINX_DATASOURCE_URL="jdbc:sqlserver://<servidor>:1433;databaseName=HOMOLOGACAO_COBRANCA;encrypt=true;trustServerCertificate=true"
+$env:MODAFLOW_LINX_DATASOURCE_USERNAME="<usuario_sql>"
+$env:MODAFLOW_LINX_DATASOURCE_PASSWORD="<senha>"
+```
+
+O datasource JPA principal (`spring.datasource`) deve continuar apontando para
+o banco próprio do ModaFlow ou para o H2 no perfil `dev`; ele não deve apontar
+para o schema Linx, pois existem nomes de tabelas coincidentes.
+
+Exemplo de consulta paginada:
+
+```text
+GET /api/v1/linx/produtos-validos?page=0&size=50&griffe=K%26J%20BLACK&colecao=402&search=BM02001J&tipo=BERMUDA&material=CETIM
+```
+
+Os filtros search, griffe, colecao, tipo e material são opcionais e aplicados
+no SQL Server antes da paginação, portanto a contagem permanece global. O
+filtro tipo corresponde exatamente ao `SUBGRUPO_PRODUTO` ativo do grupo
+`ROUPAS`; material pesquisa o código e a descrição em `dbo.MATERIAIS`.
 
 ---
 
