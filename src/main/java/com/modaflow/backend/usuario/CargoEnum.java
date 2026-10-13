@@ -14,6 +14,8 @@ public enum CargoEnum {
     ADMIN,
     /** Gestor de Coleção / Marca */
     GESTOR,
+    ASSISTENTE,
+    COORDENADOR,
     /** Estilista / Designer responsável pela criação visual */
     ESTILISTA,
     /** Modelista responsável pela modelagem técnica */

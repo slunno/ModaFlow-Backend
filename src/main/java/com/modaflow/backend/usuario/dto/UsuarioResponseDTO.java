@@ -22,4 +22,5 @@ public class UsuarioResponseDTO {
     private String avatarUrl;
     private Boolean ativo;
     private List<MarcaResponseDTO> marcasPermitidas;
+    private List<MarcaCargoResponseDTO> brandRoles;
 }

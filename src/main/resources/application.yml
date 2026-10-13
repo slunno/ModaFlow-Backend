@@ -3,8 +3,12 @@ spring:
     import: optional:file:.env.local[.properties]
   application:
     name: modaflow-backend
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 101MB
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:sqlserver}
+    active: ${SPRING_PROFILES_ACTIVE:dev}
 
 server:
   port: 8080
@@ -26,7 +30,8 @@ modaflow:
       minimum-idle: 0
       connection-timeout-ms: 10000
   jwt:
-    secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    # Required: supply a Base64-safe secret of at least 32 bytes through the environment.
+    secret: ${MODAFLOW_JWT_SECRET}
     expiration-ms: 86400000 # 24 horas
   cors:
     allowed-origins: "http://localhost:5173,http://localhost:3000"

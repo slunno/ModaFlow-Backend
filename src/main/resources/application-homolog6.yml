@@ -1,0 +1,15 @@
+# Perfil opt-in: não muda o DataSource primário, .env.local ou os destinos normais.
+# Selecionar este perfil não liga o Linx: a habilitação dedicada também deve ser explícita.
+# Não iniciar enquanto o acesso/execução não estiver aprovado para a etapa em questão.
+modaflow:
+  linx:
+    enabled: ${MODAFLOW_LINX_HOMOLOG6_ENABLED:false}
+    homolog6-only: true
+    expected-database: HOMOLOG_COBRANCA
+    datasource:
+      # Sem fallback à URL ou às credenciais do perfil normal (.3).
+      # URL aceita: jdbc:sqlserver://192.168.1.6:1433;databaseName=HOMOLOG_COBRANCA;encrypt=true;trustServerCertificate=true
+      url: ${MODAFLOW_LINX_HOMOLOG6_DATASOURCE_URL:}
+      username: ${MODAFLOW_LINX_HOMOLOG6_DATASOURCE_USERNAME:}
+      password: ${MODAFLOW_LINX_HOMOLOG6_DATASOURCE_PASSWORD:}
+      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver

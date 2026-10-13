@@ -14,11 +14,24 @@ public final class LinxDatabaseClient implements AutoCloseable {
     private final HikariDataSource dataSource;
     private final NamedParameterJdbcTemplate jdbc;
     private final boolean allowWriteCapableCredential;
+    private final String expectedDatabase;
 
     public LinxDatabaseClient(HikariDataSource dataSource, boolean allowWriteCapableCredential) {
+        this(dataSource, allowWriteCapableCredential, REQUIRED_DATABASE);
+    }
+
+    public LinxDatabaseClient(
+        HikariDataSource dataSource,
+        boolean allowWriteCapableCredential,
+        String expectedDatabase
+    ) {
+        if (expectedDatabase == null || expectedDatabase.isBlank()) {
+            throw new IllegalArgumentException("Configure o banco esperado da integração Linx.");
+        }
         this.dataSource = dataSource;
         this.jdbc = new NamedParameterJdbcTemplate(dataSource);
         this.allowWriteCapableCredential = allowWriteCapableCredential;
+        this.expectedDatabase = expectedDatabase;
     }
 
     public NamedParameterJdbcTemplate jdbc() {
@@ -26,7 +39,7 @@ public final class LinxDatabaseClient implements AutoCloseable {
     }
 
     public String expectedDatabase() {
-        return REQUIRED_DATABASE;
+        return expectedDatabase;
     }
 
     public boolean allowWriteCapableCredential() {

@@ -12,14 +12,19 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * Consultas nativas, parametrizadas e exclusivamente de leitura no Linx.
@@ -37,6 +42,22 @@ public class LinxIntegrationService {
           AND ISNULL(P.INATIVO, 0) = 0
           AND ISNULL(C.INATIVO, 0) = 0
           AND P.GRIFFE IN ('K&J BLACK', 'KING&JOE', 'KING&JOE PLAY')
+        """;
+
+    /**
+     * A listagem de coleções é definida pela griffe cadastrada na própria coleção,
+     * não pela griffe de cada produto vinculado a ela.
+     */
+    private static final String COLECOES_VALIDAS_FROM_WHERE = """
+        FROM dbo.PRODUTOS AS P
+        INNER JOIN dbo.COLECOES AS C ON C.COLECAO = P.COLECAO
+        WHERE NULLIF(RTRIM(LTRIM(P.PRODUTO)), '') IS NOT NULL
+          AND NULLIF(RTRIM(LTRIM(P.COLECAO)), '') IS NOT NULL
+          AND ISNULL(P.INATIVO, 0) = 0
+          AND ISNULL(C.INATIVO, 0) = 0
+          AND UPPER(RTRIM(LTRIM(P.GRUPO_PRODUTO))) = 'ROUPAS'
+          AND NULLIF(RTRIM(LTRIM(C.GRIFFE)), '') IS NOT NULL
+          AND RTRIM(LTRIM(C.GRIFFE)) IN ('K&J BLACK', 'KING&JOE', 'KING&JOE PLAY')
         """;
 
     private static final String CONNECTION_INFO_SQL = """
@@ -330,11 +351,26 @@ public class LinxIntegrationService {
         requireExpectedDatabase();
         List<String> griffeFilters = normalizeGriffeFilters(griffes);
         String searchFilter = blankToNull(search);
-        StringBuilder filters = new StringBuilder(PRODUTOS_VALIDOS_FROM_WHERE);
+        StringBuilder filters = new StringBuilder(COLECOES_VALIDAS_FROM_WHERE);
         MapSqlParameterSource params = new MapSqlParameterSource();
+        int anoAtual = LocalDate.now().getYear();
+
+        // O corte considera o ano comercial escrito no nome da coleção. Uma coleção
+        // "VERÃO 2026" pode terminar em 2025 e ainda deve aparecer durante 2026.
+        filters.append("""
+             AND TRY_CONVERT(
+                 int,
+                 SUBSTRING(
+                     C.DESC_COLECAO,
+                     NULLIF(PATINDEX('%20[0-9][0-9]%', C.DESC_COLECAO), 0),
+                     4
+                 )
+             ) >= :anoInicialColecao
+            """);
+        params.addValue("anoInicialColecao", anoAtual);
 
         if (!griffeFilters.isEmpty()) {
-            filters.append(" AND RTRIM(LTRIM(P.GRIFFE)) IN (:griffes)");
+            filters.append(" AND RTRIM(LTRIM(C.GRIFFE)) IN (:griffes)");
             params.addValue("griffes", griffeFilters);
         }
         if (searchFilter != null) {
@@ -354,19 +390,87 @@ public class LinxIntegrationService {
             SELECT
                 RTRIM(LTRIM(C.COLECAO)) AS CODIGO,
                 RTRIM(LTRIM(C.DESC_COLECAO)) AS NOME,
-                RTRIM(LTRIM(P.GRIFFE)) AS GRIFFE_PRODUTO,
+                RTRIM(LTRIM(C.GRIFFE)) AS GRIFFE_PRODUTO,
                 NULLIF(RTRIM(LTRIM(C.GRIFFE)), '') AS GRIFFE_COLECAO,
                 C.DATA_INICIO_META,
                 C.DATA_FINAL_META,
                 RTRIM(LTRIM(CONVERT(varchar(50), C.TEMPORADA))) AS TEMPORADA,
                 COUNT_BIG(*) AS QUANTIDADE_PRODUTOS
             """ + filters + """
-             GROUP BY C.COLECAO, C.DESC_COLECAO, P.GRIFFE, C.GRIFFE,
+             GROUP BY C.COLECAO, C.DESC_COLECAO, C.GRIFFE,
                       C.DATA_INICIO_META, C.DATA_FINAL_META, C.TEMPORADA
-             ORDER BY P.GRIFFE, C.COLECAO
+             ORDER BY C.GRIFFE, C.COLECAO
             """;
 
         return jdbc.query(sql, params, this::mapColecaoValida);
+    }
+
+    /**
+     * Retorna as roupas ativas vinculadas diretamente à coleção informada no Linx.
+     * A associação usa PRODUTOS.COLECAO = COLECOES.COLECAO e valida a griffe da coleção.
+     */
+    public List<LinxProdutoValidoResponseDTO> getProdutosDaColecao(
+        String codigoColecao,
+        String griffe
+    ) {
+        requireExpectedDatabase();
+        String codigo = blankToNull(codigoColecao);
+        if (codigo == null) {
+            throw new BusinessRuleException("O código da coleção é obrigatório.");
+        }
+
+        List<String> griffes = normalizeGriffeFilters(singletonOrEmpty(griffe));
+        if (griffes.isEmpty()) {
+            throw new BusinessRuleException("A griffe da coleção é obrigatória.");
+        }
+
+        MapSqlParameterSource params = new MapSqlParameterSource()
+            .addValue("codigoColecao", codigo.trim())
+            .addValue("griffes", griffes);
+
+        String sql = """
+            SELECT
+                P.ID,
+                RTRIM(LTRIM(P.PRODUTO)) AS CODIGO,
+                REPLACE(REPLACE(UPPER(RTRIM(LTRIM(P.PRODUTO))), '.', ''), ' ', '') AS CODIGO_NORMALIZADO,
+                RTRIM(LTRIM(P.DESC_PRODUTO)) AS DESCRICAO,
+                RTRIM(LTRIM(P.GRIFFE)) AS GRIFFE,
+                RTRIM(LTRIM(P.COLECAO)) AS COLECAO_CODIGO,
+                RTRIM(LTRIM(C.DESC_COLECAO)) AS COLECAO_NOME,
+                NULLIF(RTRIM(LTRIM(C.GRIFFE)), '') AS GRIFFE_COLECAO,
+                C.DATA_INICIO_META,
+                C.DATA_FINAL_META,
+                RTRIM(LTRIM(CONVERT(varchar(50), C.TEMPORADA))) AS TEMPORADA,
+                RTRIM(LTRIM(P.GRUPO_PRODUTO)) AS GRUPO_PRODUTO,
+                RTRIM(LTRIM(P.SUBGRUPO_PRODUTO)) AS SUBGRUPO_PRODUTO,
+                RTRIM(LTRIM(P.TIPO_PRODUTO)) AS TIPO_PRODUTO,
+                RTRIM(LTRIM(P.PERIODO_PCP)) AS PERIODO_PCP,
+                RTRIM(LTRIM(P.GRADE)) AS GRADE,
+                RTRIM(LTRIM(P.LINHA)) AS LINHA,
+                RTRIM(LTRIM(P.CARTELA)) AS CARTELA,
+                RTRIM(LTRIM(P.MATERIAL)) AS MATERIAL,
+                (
+                    SELECT MIN(RTRIM(LTRIM(M.DESC_MATERIAL)))
+                    FROM dbo.MATERIAIS AS M
+                    WHERE M.MATERIAL = P.MATERIAL
+                ) AS DESC_MATERIAL,
+                RTRIM(LTRIM(P.MODELAGEM)) AS MODELAGEM,
+                RTRIM(LTRIM(P.ESTILISTA)) AS ESTILISTA,
+                RTRIM(LTRIM(P.MODELISTA)) AS MODELISTA,
+                RTRIM(LTRIM(CONVERT(varchar(30), P.STATUS_PRODUTO))) AS STATUS_PRODUTO,
+                RTRIM(LTRIM(CONVERT(varchar(30), P.TIPO_STATUS_PRODUTO))) AS TIPO_STATUS_PRODUTO,
+                P.DATA_CADASTRAMENTO,
+                P.DATA_INICIO_DESENVOLVIMENTO,
+                P.CUSTO_REPOSICAO1,
+                P.PRECO_REPOSICAO_1
+            """ + COLECOES_VALIDAS_FROM_WHERE + """
+             AND RTRIM(LTRIM(C.COLECAO)) = :codigoColecao
+             AND RTRIM(LTRIM(C.GRIFFE)) IN (:griffes)
+             AND RTRIM(LTRIM(P.GRIFFE)) IN (:griffes)
+             ORDER BY P.PRODUTO, P.ID
+            """;
+
+        return jdbc.query(sql, params, this::mapProdutoValido);
     }
 
     public List<String> getSubgrupos() {
@@ -396,6 +500,159 @@ public class LinxIntegrationService {
         return List.of("K&J BLACK", "KING&JOE", "KING&JOE PLAY");
     }
 
+    /** Consulta paginada por limite, com pesquisa por nome ou código do fornecedor. */
+    public List<LinxFornecedorDTO> getFornecedores(String search) {
+        requireExpectedDatabase();
+        return jdbc.query("""
+            SELECT DISTINCT TOP (50)
+                RTRIM(LTRIM(FORNECEDOR)) AS FORNECEDOR,
+                RTRIM(LTRIM(COD_FORNECEDOR)) AS CODIGO
+            FROM dbo.FORNECEDORES
+            WHERE NULLIF(RTRIM(LTRIM(FORNECEDOR)), '') IS NOT NULL
+              AND INATIVO = 0
+              AND EXISTS (SELECT 1 FROM dbo.CADASTRO_CLI_FOR CF
+                  WHERE CF.NOME_CLIFOR = FORNECEDORES.FORNECEDOR AND CF.INATIVO = 0)
+              AND (:search = '' OR CHARINDEX(:search, FORNECEDOR) > 0
+                   OR CHARINDEX(:search, COD_FORNECEDOR) > 0)
+            ORDER BY FORNECEDOR, CODIGO
+            """, new MapSqlParameterSource("search", search == null ? "" : search.trim()),
+            (rs, rowNum) -> new LinxFornecedorDTO(clean(rs.getString("FORNECEDOR")), clean(rs.getString("CODIGO"))));
+    }
+
+    /** Cadastro ativo e vínculos cor/fornecedor, sem escolher ou converter custos. */
+    public LinxMaterialCadastroDTO getMaterialCadastro(String codigo) {
+        String codigoNormalizado = codigo == null ? "" : codigo.trim();
+        if (codigoNormalizado.isEmpty() || codigoNormalizado.length() > 50) {
+            throw new BusinessRuleException("Informe um código de material Linx válido (até 50 caracteres).");
+        }
+
+        requireExpectedDatabase();
+        var params = new MapSqlParameterSource("codigo", codigoNormalizado);
+        List<LinxMaterialCadastroDTO> materiais = jdbc.query("""
+            SELECT TOP (1)
+                RTRIM(LTRIM(M.MATERIAL)) AS CODIGO,
+                RTRIM(LTRIM(M.DESC_MATERIAL)) AS NOME,
+                RTRIM(LTRIM(M.GRUPO)) AS GRUPO,
+                RTRIM(LTRIM(M.UNID_ESTOQUE)) AS UNIDADE_ESTOQUE,
+                RTRIM(LTRIM(M.UNID_FICHA_TEC)) AS UNIDADE_FICHA_TECNICA,
+                M.LARGURA AS LARGURA,
+                M.COMPRIMENTO AS COMPRIMENTO,
+                M.U_ALTURA AS ALTURA,
+                M.U_RENDIMENTO AS RENDIMENTO,
+                M.CUSTO_A_VISTA,
+                M.CUSTO_REPOSICAO
+            FROM dbo.MATERIAIS AS M
+            WHERE RTRIM(LTRIM(M.MATERIAL)) = :codigo
+              AND M.INATIVO = 0
+            ORDER BY M.MATERIAL
+            """, params, (rs, rowNum) -> new LinxMaterialCadastroDTO(
+                clean(rs.getString("CODIGO")),
+                clean(rs.getString("NOME")),
+                clean(rs.getString("GRUPO")),
+                clean(rs.getString("UNIDADE_ESTOQUE")),
+                clean(rs.getString("UNIDADE_FICHA_TECNICA")),
+                clean(rs.getString("LARGURA")),
+                clean(rs.getString("COMPRIMENTO")),
+                clean(rs.getString("ALTURA")),
+                rs.getBigDecimal("RENDIMENTO"),
+                List.of(),
+                rs.getBigDecimal("CUSTO_A_VISTA"),
+                rs.getBigDecimal("CUSTO_REPOSICAO"),
+                List.of()
+            ));
+        if (materiais.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                "Nenhum material ativo do Linx foi encontrado para o código '" + codigoNormalizado + "'.");
+        }
+
+        // Gramatura e encolhimentos vivem no cadastro por cor; retornamos as opções
+        // sem escolher uma delas implicitamente para o usuário.
+        List<java.util.Map<String, Object>> cores = jdbc.queryForList("""
+            SELECT
+                RTRIM(LTRIM(C.MATERIAL)) AS MATERIAL,
+                RTRIM(LTRIM(C.COR_MATERIAL)) AS CODIGO_COR,
+                RTRIM(LTRIM(C.DESC_COR_MATERIAL)) AS NOME_COR,
+                C.GRAMATURA,
+                C.TEC_ENCOLHIMENTO_CORTE_X,
+                C.TEC_ENCOLHIMENTO_CORTE_Y,
+                C.TEC_ENCOLHIMENTO_ACABAMENTO_X,
+                C.TEC_ENCOLHIMENTO_ACABAMENTO_Y,
+                C.TEC_ENCOLHIMENTO_LAVAGEM_X,
+                C.TEC_ENCOLHIMENTO_LAVAGEM_Y,
+                C.CUSTO_A_VISTA,
+                C.CUSTO_REPOSICAO
+            FROM dbo.MATERIAIS_CORES AS C
+            WHERE RTRIM(LTRIM(C.MATERIAL)) = :codigo
+              AND C.INATIVO = 0
+            ORDER BY C.COR_MATERIAL
+            """, params);
+
+        // MATERIAIS_FORNECEDOR não possui INATIVO: a validade vem da cor,
+        // de FORNECEDORES e do cadastro correspondente em CADASTRO_CLI_FOR.
+        List<java.util.Map<String, Object>> fornecedores = jdbc.queryForList("""
+            SELECT
+                RTRIM(LTRIM(MF.COR_MATERIAL)) AS CODIGO_COR,
+                RTRIM(LTRIM(C.DESC_COR_MATERIAL)) AS NOME_COR,
+                RTRIM(LTRIM(MF.FORNECEDOR)) AS FORNECEDOR,
+                RTRIM(LTRIM(F.COD_FORNECEDOR)) AS CODIGO_FORNECEDOR,
+                RTRIM(LTRIM(MF.UNIDADE)) AS UNIDADE,
+                MF.FATOR_CONVERSAO_FORNECEDOR,
+                MF.CUSTO_REPOSICAO,
+                'MATERIAIS_FORNECEDOR.CUSTO_REPOSICAO' AS FONTE
+            FROM dbo.MATERIAIS_FORNECEDOR MF
+            INNER JOIN dbo.MATERIAIS_CORES C
+                ON C.MATERIAL = MF.MATERIAL AND C.COR_MATERIAL = MF.COR_MATERIAL
+            INNER JOIN dbo.FORNECEDORES F ON F.FORNECEDOR = MF.FORNECEDOR
+            INNER JOIN dbo.CADASTRO_CLI_FOR CF ON CF.NOME_CLIFOR = F.FORNECEDOR
+            WHERE MF.MATERIAL = :codigo
+              AND C.INATIVO = 0 AND F.INATIVO = 0 AND CF.INATIVO = 0
+            ORDER BY MF.COR_MATERIAL, F.FORNECEDOR, F.COD_FORNECEDOR
+            """, params);
+
+        LinxMaterialCadastroDTO base = materiais.getFirst();
+        return new LinxMaterialCadastroDTO(base.codigo(), base.nome(), base.grupo(),
+            base.unidadeEstoque(), base.unidadeFichaTecnica(), base.largura(), base.comprimento(),
+            base.altura(), base.rendimento(), cores, base.custoAVista(), base.custoReposicao(), fornecedores);
+    }
+
+    public List<String> getCoresBasicas(String search) {
+        requireExpectedDatabase();
+        return jdbc.query("""
+            SELECT DISTINCT TOP (50) RTRIM(LTRIM(DESC_COR)) AS VALOR
+            FROM dbo.CORES_BASICAS
+            WHERE NULLIF(RTRIM(LTRIM(DESC_COR)), '') IS NOT NULL
+              AND (:search = '' OR CHARINDEX(:search, DESC_COR) > 0)
+            ORDER BY VALOR
+            """, new MapSqlParameterSource("search", search == null ? "" : search.trim()),
+            (rs, rowNum) -> clean(rs.getString("VALOR")));
+    }
+
+    /** Lista todas as descrições de cores, sem o limite usado no autocomplete. */
+    public List<String> getCoresCatalogo() {
+        requireExpectedDatabase();
+        return queryStrings("""
+            SELECT DISTINCT RTRIM(LTRIM(DESC_COR)) AS VALOR
+            FROM dbo.CORES_BASICAS
+            WHERE NULLIF(RTRIM(LTRIM(DESC_COR)), '') IS NOT NULL
+            ORDER BY VALOR
+            """);
+    }
+
+    public List<String> getModelagens() {
+        requireExpectedDatabase();
+        return queryStrings("""
+            SELECT DISTINCT RTRIM(LTRIM(PRODUTO)) AS VALOR
+            FROM dbo.PRODUTOS
+            WHERE NULLIF(RTRIM(LTRIM(PRODUTO)), '') IS NOT NULL
+            ORDER BY VALOR
+            """);
+    }
+
+    /** Cores disponíveis para o mostruário, lidas diretamente do cadastro Linx. */
+    public List<String> getCoresMostruario() {
+        return getCoresCatalogo();
+    }
+
     public List<String> getGrades() {
         requireExpectedDatabase();
         return queryStrings("""
@@ -404,6 +661,43 @@ public class LinxIntegrationService {
             WHERE NULLIF(RTRIM(LTRIM(GRADE)), '') IS NOT NULL
             ORDER BY VALOR
             """);
+    }
+
+    /** Consulta exata, parametrizada. NUMERO_TAMANHOS não gera posições ausentes. */
+    public LinxGradeDetalheDTO getGradeDetalhe(String grade) {
+        String codigo = grade == null ? "" : grade.trim();
+        if (codigo.isEmpty() || codigo.length() > 25)
+            throw new BusinessRuleException("Informe uma grade Linx válida, com até 25 caracteres.");
+        requireExpectedDatabase();
+        String campos = IntStream.rangeClosed(1, 48).mapToObj(i -> "TAMANHO_" + i)
+            .collect(Collectors.joining(", "));
+        List<LinxGradeDetalheDTO> grades = jdbc.query(
+            "SELECT GRADE, NUMERO_TAMANHOS, " + campos + " FROM dbo.PRODUTOS_TAMANHOS WHERE GRADE = :grade",
+            new MapSqlParameterSource("grade", codigo), (rs, rowNum) -> {
+                List<LinxGradeDetalheDTO.Posicao> posicoes = new ArrayList<>();
+                for (int i = 1; i <= 48; i++) {
+                    String tamanho = clean(rs.getString("TAMANHO_" + i));
+                    posicoes.add(new LinxGradeDetalheDTO.Posicao(i, tamanho));
+                }
+                return new LinxGradeDetalheDTO(clean(rs.getString("GRADE")), rs.getInt("NUMERO_TAMANHOS"), List.copyOf(posicoes));
+            });
+        if (grades.size() != 1)
+            throw new BusinessRuleException("Grade não encontrada ou ambígua no Linx. Nenhum tamanho foi deduzido.");
+        return grades.getFirst();
+    }
+
+    /** Busca por nome ou código; preserva cores com a mesma descrição e códigos distintos. */
+    public List<LinxCorCodigoDTO> getCoresComCodigo(String search) {
+        String termo = search == null ? "" : search.trim();
+        if (termo.length() > 100) throw new BusinessRuleException("A busca de cor aceita até 100 caracteres.");
+        requireExpectedDatabase();
+        return jdbc.query("""
+            SELECT TOP (50) COR, DESC_COR FROM dbo.CORES_BASICAS
+            WHERE USO_PRODUTOS = 1 AND NULLIF(LTRIM(RTRIM(COR)), '') IS NOT NULL
+              AND (:search = '' OR CHARINDEX(:search, COR) > 0 OR CHARINDEX(:search, DESC_COR) > 0)
+            ORDER BY DESC_COR, COR
+            """, new MapSqlParameterSource("search", termo),
+            (rs, rowNum) -> new LinxCorCodigoDTO(clean(rs.getString("COR")), clean(rs.getString("DESC_COR"))));
     }
 
     public List<String> getCategorias() {
@@ -423,7 +717,7 @@ public class LinxIntegrationService {
         );
     }
 
-    private LinxConnectionInfoDTO requireExpectedDatabase() {
+    LinxConnectionInfoDTO requireExpectedDatabase() {
         LinxConnectionInfoDTO connection = getConnectionInfo();
         if (!connection.bancoEsperadoConfirmado()) {
             throw new BusinessRuleException(

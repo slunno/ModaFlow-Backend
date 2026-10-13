@@ -1,0 +1,16 @@
+# Exemplo inativo: não é application*.yml nem é importado automaticamente.
+# Credenciais somente via variáveis protegidas. Nunca copiar senha neste arquivo.
+# Antes de habilitar: aplicar a migração modaflow aprovada e definir limite técnico.
+modaflow:
+  ficha:
+    persistence:
+      enabled: false
+      maximum-document-bytes: ${MODAFLOW_FICHA_MAXIMUM_DOCUMENT_BYTES}
+      datasource:
+        url: jdbc:sqlserver://192.168.1.6:1433;databaseName=HOMOLOG_COBRANCA;encrypt=true;trustServerCertificate=true
+        username: ${MODAFLOW_FICHA_DATASOURCE_USERNAME}
+        password: ${MODAFLOW_FICHA_DATASOURCE_PASSWORD}
+        driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+        maximum-pool-size: 3
+        minimum-idle: 0
+        connection-timeout-ms: 10000

@@ -1,13 +1,16 @@
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:sqlserver://192.168.1.3:1433;databaseName=HOMOLOGACAO_COBRANCA;encrypt=false;trustServerCertificate=true;}
-    username: ${SPRING_DATASOURCE_USERNAME:nathan.henrique}
-    password: ${SPRING_DATASOURCE_PASSWORD:king@123}
+    # All SQL Server connection values are mandatory environment variables.
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
 
   jpa:
+    generate-ddl: false
     hibernate:
-      ddl-auto: update
+      # O esquema pertence ao Linx; a aplicação jamais deve alterá-lo ao iniciar.
+      ddl-auto: none
     show-sql: true
     properties:
       hibernate:

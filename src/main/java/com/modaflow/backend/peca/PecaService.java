@@ -17,4 +17,5 @@ public interface PecaService {
     PecaResponseDTO criar(CriarPecaRequestDTO request);
     PecaResponseDTO atualizar(Long id, AtualizarPecaRequestDTO request);
     PecaResponseDTO moverEtapa(Long id, EtapaPecaEnum novaEtapa);
+    PecaResponseDTO entregarFicha(Long id, EtapaPecaEnum novaEtapa, com.modaflow.backend.ficha.FichaConferenciaRequest ficha);
 }

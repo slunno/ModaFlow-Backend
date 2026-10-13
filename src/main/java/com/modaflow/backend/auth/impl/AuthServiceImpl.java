@@ -7,11 +7,14 @@ import com.modaflow.backend.usuario.Usuario;
 import com.modaflow.backend.common.exception.BusinessRuleException;
 import com.modaflow.backend.common.exception.ResourceNotFoundException;
 import com.modaflow.backend.usuario.UsuarioMapper;
-import com.modaflow.backend.usuario.InMemoryUserRepository;
+import com.modaflow.backend.usuario.UsuarioResponseAssembler;
+import com.modaflow.backend.usuario.UsuarioRepository;
 import com.modaflow.backend.security.JwtTokenProvider;
 import com.modaflow.backend.auth.AuthService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.modaflow.backend.security.UserPrincipal;
 import org.springframework.stereotype.Service;
 
 /**
@@ -23,10 +26,13 @@ import org.springframework.stereotype.Service;
 public class AuthServiceImpl implements AuthService {
 
     @Autowired
-    private InMemoryUserRepository userRepository;
+    private UsuarioRepository userRepository;
 
     @Autowired
     private UsuarioMapper usuarioMapper;
+
+    @Autowired
+    private UsuarioResponseAssembler responseAssembler;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -49,15 +55,18 @@ public class AuthServiceImpl implements AuthService {
         }
 
         String token = jwtTokenProvider.generateToken(usuario.getEmail());
-        UsuarioResponseDTO responseDTO = usuarioMapper.toResponseDTO(usuario);
+        UsuarioResponseDTO responseDTO = responseAssembler.toResponseDTO(usuario);
         return new AuthResponseDTO(token, responseDTO);
     }
 
     @Override
     public UsuarioResponseDTO getUsuarioLogado() {
-        // Retorna o usuário padrão logado (ou o primeiro usuário ativo)
-        Usuario usuario = userRepository.findByEmail("admin@akrbrands.com.br")
-                .orElseGet(() -> userRepository.findAll().stream().findFirst().orElse(null));
-        return usuarioMapper.toResponseDTO(usuario);
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (!(principal instanceof UserPrincipal userPrincipal)) {
+            throw new ResourceNotFoundException("Usuário autenticado não encontrado.");
+        }
+        Usuario usuario = userRepository.findByEmail(userPrincipal.getEmail())
+                .orElseThrow(() -> new ResourceNotFoundException("Usuário autenticado não encontrado."));
+        return responseAssembler.toResponseDTO(usuario);
     }
 }

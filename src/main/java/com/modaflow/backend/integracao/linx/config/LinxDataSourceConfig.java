@@ -15,9 +15,14 @@ public class LinxDataSourceConfig {
     @ConditionalOnProperty(prefix = "modaflow.linx", name = "enabled", havingValue = "true")
     public LinxDatabaseClient linxDatabaseClient(LinxDataSourceProperties properties) {
         LinxDataSourceProperties.DataSource source = properties.getDatasource();
-        requireText(source.getUrl(), "MODAFLOW_LINX_DATASOURCE_URL");
-        requireText(source.getUsername(), "MODAFLOW_LINX_DATASOURCE_USERNAME");
-        requireText(source.getPassword(), "MODAFLOW_LINX_DATASOURCE_PASSWORD");
+        // Validação puramente local: deve preceder até a construção do pool.
+        LinxHomologConnectionValidator.validateBeforePool(properties);
+        String sourcePrefix = properties.isHomolog6Only()
+            ? "MODAFLOW_LINX_HOMOLOG6_DATASOURCE_" : "MODAFLOW_LINX_DATASOURCE_";
+        requireText(source.getUrl(), sourcePrefix + "URL");
+        requireText(source.getUsername(), sourcePrefix + "USERNAME");
+        requireText(source.getPassword(), sourcePrefix + "PASSWORD");
+        requireText(properties.getExpectedDatabase(), "modaflow.linx.expected-database");
 
         HikariConfig hikari = new HikariConfig();
         hikari.setPoolName("ModaFlow-Linx-ReadOnly");
@@ -34,9 +39,15 @@ public class LinxDataSourceConfig {
         hikari.setConnectionTimeout(Math.max(250, source.getConnectionTimeoutMs()));
 
         return new LinxDatabaseClient(
-            new HikariDataSource(hikari),
-            properties.isAllowWriteCapableCredential()
+            createDataSource(hikari),
+            properties.isAllowWriteCapableCredential(),
+            properties.getExpectedDatabase()
         );
+    }
+
+    /** Separado para comprovar, sem pool/socket em testes, a ordem da validação. */
+    protected HikariDataSource createDataSource(HikariConfig configuration) {
+        return new HikariDataSource(configuration);
     }
 
     private void requireText(String value, String environmentVariable) {

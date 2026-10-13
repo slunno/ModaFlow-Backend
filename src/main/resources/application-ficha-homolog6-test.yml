@@ -1,0 +1,77 @@
+# Configuração isolada para teste autorizado de rascunhos, NÃO importada pelo app normal.
+# O launcher usa somente este recurso via spring.config.location e profiles dev +
+# ficha-homolog6-test; application.yml/.env/application-sqlserver.yml ficam de fora.
+# Autenticação/griffes do seeder dev são fixtures no H2 local exclusivo em target,
+# não produção. O arquivo local permite provar persistência após reiniciar.
+spring:
+  autoconfigure:
+    # O projeto autentica via AuthService/BCrypt/JWT próprios, não o usuário default.
+    # Exclusão só neste teste evita criar/logar senha aleatória inutilizada.
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+  application:
+    name: modaflow-ficha-homolog6-test
+  config:
+    import: []
+  datasource:
+    url: ${MODAFLOW_FICHA_TEST_AUTH_JDBC_URL}
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  sql:
+    init:
+      mode: never
+  h2:
+    console:
+      enabled: false
+  jpa:
+    open-in-view: false
+    show-sql: false
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        hbm2ddl:
+          import_files: ""
+
+server:
+  address: 127.0.0.1
+  port: 18081
+  servlet:
+    context-path: /api/v1
+
+modaflow:
+  jwt:
+    # Aleatório por lançamento, somente na memória do processo filho.
+    secret: ${MODAFLOW_FICHA_TEST_JWT_SECRET}
+    expiration-ms: 3600000
+  linx:
+    enabled: false
+  ficha:
+    persistence:
+      # Experimento central encerrado: rascunho e histórico são somente locais.
+      enabled: false
+      # 1 MiB é limite técnico DESTE TESTE; não define requisito de negócio/produção.
+      maximum-document-bytes: 1048576
+      datasource:
+        url: jdbc:sqlserver://192.168.1.6:1433;databaseName=HOMOLOG_COBRANCA;encrypt=true;trustServerCertificate=true
+        username: ${MODAFLOW_FICHA_TEST_DATASOURCE_USERNAME}
+        password: ${MODAFLOW_FICHA_TEST_DATASOURCE_PASSWORD}
+        driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+        maximum-pool-size: 2
+        minimum-idle: 0
+        connection-timeout-ms: 10000
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+logging:
+  level:
+    root: INFO
+    com.zaxxer.hikari: WARN
+    com.microsoft.sqlserver: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.orm.jdbc.bind: WARN

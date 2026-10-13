@@ -7,6 +7,10 @@ import com.modaflow.backend.marca.dto.AtualizarMarcaRequestDTO;
 import com.modaflow.backend.marca.dto.MarcaResponseDTO;
 import com.modaflow.backend.marca.MarcaService;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.modaflow.backend.marca.MarcaRepository;
+import com.modaflow.backend.marca.MarcaMapper;
+import com.modaflow.backend.marca.Marca;
 
 import java.util.List;
 
@@ -16,28 +20,28 @@ import java.util.List;
  */
 @Service
 public class MarcaServiceImpl implements MarcaService {
+    @Autowired private MarcaRepository repository;
+    @Autowired private MarcaMapper mapper;
 
     @Override
     public List<MarcaResponseDTO> listarTodas() {
-        // TODO: Buscar todas as marcas do repositório
-        return List.of();
+        return repository.findAll().stream().map(this::toResponse).toList();
     }
 
     @Override
     public MarcaResponseDTO buscarPorId(Long id) {
-        // TODO: Buscar marca por ID ou lançar ResourceNotFoundException
-        return null;
+        return toResponse(require(id));
     }
 
     @Override
     public MarcaResponseDTO criar(CriarMarcaRequestDTO request) {
-        // TODO: Salvar nova marca no banco de dados
-        return null;
+        return toResponse(repository.save(mapper.toEntity(request)));
     }
 
     @Override
     public MarcaResponseDTO atualizar(Long id, AtualizarMarcaRequestDTO request) {
-        // TODO: Atualizar dados da marca existente
-        return null;
+        Marca marca=require(id); if(request.getNome()!=null)marca.setNome(request.getNome()); if(request.getCode()!=null)marca.setCode(request.getCode()); if(request.getInitials()!=null)marca.setInitials(request.getInitials()); if(request.getHeroImageUrl()!=null)marca.setHeroImageUrl(request.getHeroImageUrl()); if(request.getLogoUrl()!=null)marca.setLogoUrl(request.getLogoUrl()); if(request.getDescription()!=null)marca.setDescription(request.getDescription()); if(request.getBadgeTag()!=null)marca.setBadgeTag(request.getBadgeTag()); return toResponse(repository.save(marca));
     }
+    private Marca require(Long id){return repository.findById(id).orElseThrow(()->new ResourceNotFoundException("Marca não encontrada."));}
+    private MarcaResponseDTO toResponse(Marca marca){MarcaResponseDTO dto=mapper.toResponseDTO(marca);dto.setColecoesCount(marca.getColecoes()==null?0:marca.getColecoes().size());dto.setPecasCount(marca.getColecoes()==null?0:marca.getColecoes().stream().mapToInt(c->c.getPecas()==null?0:c.getPecas().size()).sum());return dto;}
 }

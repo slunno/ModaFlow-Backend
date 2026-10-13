@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -73,6 +74,14 @@ public class LinxIntegrationController {
         return ResponseEntity.ok(service().getColecoesValidas(griffe, search));
     }
 
+    @GetMapping("/colecoes/{codigo}/produtos")
+    public ResponseEntity<List<LinxProdutoValidoResponseDTO>> getProdutosDaColecao(
+        @PathVariable String codigo,
+        @RequestParam String griffe
+    ) {
+        return ResponseEntity.ok(service().getProdutosDaColecao(codigo, griffe));
+    }
+
     @GetMapping("/opcoes")
     public ResponseEntity<LinxOpcoesResponseDTO> getOpcoesLinx() {
         return ResponseEntity.ok(service().getOpcoesLinx());
@@ -93,9 +102,49 @@ public class LinxIntegrationController {
         return ResponseEntity.ok(service().getGriffes());
     }
 
+    @GetMapping("/fornecedores")
+    public ResponseEntity<List<LinxFornecedorDTO>> getFornecedores(@RequestParam(required = false) String search) {
+        return ResponseEntity.ok(service().getFornecedores(search));
+    }
+
+    @GetMapping("/materiais/cadastro")
+    public ResponseEntity<LinxMaterialCadastroDTO> getMaterialCadastro(@RequestParam String codigo) {
+        return ResponseEntity.ok(service().getMaterialCadastro(codigo));
+    }
+
+    @GetMapping("/cores-basicas")
+    public ResponseEntity<List<String>> getCoresBasicas(@RequestParam(required = false) String search) {
+        return ResponseEntity.ok(service().getCoresBasicas(search));
+    }
+
+    @GetMapping("/cores-catalogo")
+    public ResponseEntity<List<String>> getCoresCatalogo() {
+        return ResponseEntity.ok(service().getCoresCatalogo());
+    }
+
+    @GetMapping("/modelagens")
+    public ResponseEntity<List<String>> getModelagens() {
+        return ResponseEntity.ok(service().getModelagens());
+    }
+
+    @GetMapping("/cores-mostruario")
+    public ResponseEntity<List<String>> getCoresMostruario() {
+        return ResponseEntity.ok(service().getCoresMostruario());
+    }
+
     @GetMapping("/grades")
     public ResponseEntity<List<String>> getGrades() {
         return ResponseEntity.ok(service().getGrades());
+    }
+
+    @GetMapping("/grades/detalhe")
+    public ResponseEntity<LinxGradeDetalheDTO> getGradeDetalhe(@RequestParam("grade") String grade) {
+        return ResponseEntity.ok(service().getGradeDetalhe(grade));
+    }
+
+    @GetMapping("/cores-basicas/codigos")
+    public ResponseEntity<List<LinxCorCodigoDTO>> getCoresComCodigo(@RequestParam(value = "search", required = false) String search) {
+        return ResponseEntity.ok(service().getCoresComCodigo(search));
     }
 
     @GetMapping("/categorias")

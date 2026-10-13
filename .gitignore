@@ -21,3 +21,6 @@ logs/
 ### Environment ###
 .env
 .env.local
+data/
+*.mv.db
+*.trace.db

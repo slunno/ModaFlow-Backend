@@ -13,7 +13,8 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface UsuarioMapper {
 
-    @Mapping(target = "marcasPermitidas", expression = "java(java.util.Collections.emptyList())")
+    @Mapping(target = "marcasPermitidas", ignore = true)
+    @Mapping(target = "brandRoles", ignore = true)
     UsuarioResponseDTO toResponseDTO(Usuario usuario);
 
     List<UsuarioResponseDTO> toResponseDTOList(List<Usuario> usuarios);

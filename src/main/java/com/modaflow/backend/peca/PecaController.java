@@ -56,4 +56,12 @@ public class PecaController {
     public ResponseEntity<PecaResponseDTO> moverEtapa(@PathVariable Long id, @RequestParam EtapaPecaEnum novaEtapa) {
         return ResponseEntity.ok(pecaService.moverEtapa(id, novaEtapa));
     }
+
+    @PostMapping("/{id}/entrega")
+    @Operation(summary = "Entregar peça após conferir a ficha enviada; não integra no Linx")
+    public ResponseEntity<PecaResponseDTO> entregarFicha(@PathVariable Long id,
+            @RequestParam EtapaPecaEnum novaEtapa,
+            @Valid @RequestBody com.modaflow.backend.ficha.FichaConferenciaRequest ficha) {
+        return ResponseEntity.ok(pecaService.entregarFicha(id, novaEtapa, ficha));
+    }
 }

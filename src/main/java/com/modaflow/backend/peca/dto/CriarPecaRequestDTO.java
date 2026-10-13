@@ -21,7 +21,7 @@ public class CriarPecaRequestDTO {
     @NotNull(message = "O status é obrigatório")
     private StatusPecaEnum status;
     @NotNull(message = "A etapa atual é obrigatória")
-    private EtapaPecaEnum etapaAtual;
+    private EtapaPecaEnum etapaAtual = EtapaPecaEnum.GERACAO_FICHA;
     private String tema;
     private String estilista;
     private String modelista;

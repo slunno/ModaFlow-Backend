@@ -7,6 +7,8 @@ public class LinxDataSourceProperties {
 
     private boolean enabled;
     private boolean allowWriteCapableCredential = true;
+    private String expectedDatabase = LinxDatabaseClient.REQUIRED_DATABASE;
+    private boolean homolog6Only;
     private final DataSource datasource = new DataSource();
 
     public boolean isEnabled() {
@@ -23,6 +25,22 @@ public class LinxDataSourceProperties {
 
     public void setAllowWriteCapableCredential(boolean allowWriteCapableCredential) {
         this.allowWriteCapableCredential = allowWriteCapableCredential;
+    }
+
+    public String getExpectedDatabase() {
+        return expectedDatabase;
+    }
+
+    public void setExpectedDatabase(String expectedDatabase) {
+        this.expectedDatabase = expectedDatabase;
+    }
+
+    public boolean isHomolog6Only() {
+        return homolog6Only;
+    }
+
+    public void setHomolog6Only(boolean homolog6Only) {
+        this.homolog6Only = homolog6Only;
     }
 
     public DataSource getDatasource() {
