@@ -128,14 +128,15 @@ Defina `MODAFLOW_LINX_ALLOW_WRITE_CAPABLE_CREDENTIAL=false` para voltar a exigir
 uma credencial exclusiva com `SELECT`.
 
 O destino é fixo no código: antes de qualquer consulta de catálogo, `DB_NAME()`
-deve ser exatamente `HOMOLOGACAO_COBRANCA`. Uma conexão para outro banco é
+deve ser exatamente `HOMOLOGACAO_ATUAL` no `192.168.1.3:1433`. Uma conexão para outro banco é
 bloqueada mesmo que a URL ou outra propriedade tente indicar um destino diferente.
 
 Variáveis necessárias (não salve senhas no repositório):
 
 ```powershell
 $env:MODAFLOW_LINX_ENABLED="true"
-$env:MODAFLOW_LINX_DATASOURCE_URL="jdbc:sqlserver://<servidor>:1433;databaseName=HOMOLOGACAO_COBRANCA;encrypt=true;trustServerCertificate=true"
+$env:MODAFLOW_LINX_DATASOURCE_URL="jdbc:sqlserver://192.168.1.3:1433;databaseName=HOMOLOGACAO_ATUAL;encrypt=true;trustServerCertificate=true"
+$env:MODAFLOW_LINX_EXPECTED_DATABASE="HOMOLOGACAO_ATUAL"
 $env:MODAFLOW_LINX_DATASOURCE_USERNAME="<usuario_sql>"
 $env:MODAFLOW_LINX_DATASOURCE_PASSWORD="<senha>"
 ```

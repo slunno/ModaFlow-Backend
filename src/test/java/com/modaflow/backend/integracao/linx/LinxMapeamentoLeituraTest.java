@@ -101,10 +101,28 @@ class LinxMapeamentoLeituraTest {
             .doesNotContain("PC.COR_PRODUTO = CB.COR", "BM00002", "UPDATE", "INSERT", "DELETE");
         assertThat(params.getValue().getValue("descColecao")).isEqualTo("Teste");
     }
+    @Test @SuppressWarnings({"unchecked", "rawtypes"}) void mostruarioCompletoPreservaCodigosSemAgruparDescricao() throws Exception {
+        var first = mock(ResultSet.class);
+        var second = mock(ResultSet.class);
+        when(first.getString("COR")).thenReturn(" 00003 ");
+        when(first.getString("DESC_COR")).thenReturn(" PRETO ");
+        when(second.getString("COR")).thenReturn(" 00999 ");
+        when(second.getString("DESC_COR")).thenReturn(" PRETO ");
+        when(jdbc.query(anyString(), any(MapSqlParameterSource.class), any(RowMapper.class)))
+            .thenAnswer(inv -> List.of(((RowMapper<?>) inv.getArgument(2)).mapRow(first, 0),
+                ((RowMapper<?>) inv.getArgument(2)).mapRow(second, 1)));
+        assertThat(integration.getCoresMostruarioComCodigo()).containsExactly(
+            new LinxCorCodigoDTO("00003", "PRETO"), new LinxCorCodigoDTO("00999", "PRETO"));
+        var sql = ArgumentCaptor.forClass(String.class);
+        verify(jdbc).query(sql.capture(), any(MapSqlParameterSource.class), any(RowMapper.class));
+        assertThat(sql.getValue()).contains("SELECT COR, DESC_COR", "FROM dbo.CORES_BASICAS", "ORDER BY DESC_COR, COR")
+            .doesNotContain("TOP", "DISTINCT", "INATIVO", "INSERT", "UPDATE", "DELETE", "EXEC");
+    }
     @Test void guardaDeBancoBloqueiaNovasConsultas() {
         doReturn(new LinxConnectionInfoDTO("outro", "OUTRO", "HOMOLOG_COBRANCA", false, true, true, List.of())).when(integration).getConnectionInfo();
         assertThatThrownBy(() -> integration.getGradeDetalhe("P")).isInstanceOf(BusinessRuleException.class);
         assertThatThrownBy(() -> integration.getCoresComCodigo("")).isInstanceOf(BusinessRuleException.class);
+        assertThatThrownBy(() -> integration.getCoresMostruarioComCodigo()).isInstanceOf(BusinessRuleException.class);
         assertThatThrownBy(() -> fichas.getCoresProduto("P1", "KING&JOE", "025", "Teste")).isInstanceOf(BusinessRuleException.class);
         verifyNoInteractions(jdbc);
     }
@@ -113,6 +131,7 @@ class LinxMapeamentoLeituraTest {
         var fichaController = new LinxFichaController(Optional.empty(), Optional.empty());
         assertThatThrownBy(() -> controller.getGradeDetalhe("P")).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
         assertThatThrownBy(() -> controller.getCoresComCodigo("")).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThatThrownBy(controller::getCoresMostruarioComCodigo).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
         assertThatThrownBy(() -> fichaController.getCoresProduto("025", "P1", "KING&JOE", "Teste")).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
     }
 }

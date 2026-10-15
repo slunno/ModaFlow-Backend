@@ -37,8 +37,10 @@ public class LinxIntegrationService {
     private static final String PRODUTOS_VALIDOS_FROM_WHERE = """
         FROM dbo.PRODUTOS AS P
         INNER JOIN dbo.COLECOES AS C ON C.COLECAO = P.COLECAO
+          OR (C.GRIFFE = P.GRIFFE AND EXISTS (SELECT 1 FROM dbo.PRODUTO_FICHA_VERSAO H
+              WHERE H.PRODUTO=P.PRODUTO AND H.U_COLECAO=C.COLECAO))
         WHERE NULLIF(RTRIM(LTRIM(P.PRODUTO)), '') IS NOT NULL
-          AND NULLIF(RTRIM(LTRIM(P.COLECAO)), '') IS NOT NULL
+          AND NULLIF(RTRIM(LTRIM(C.COLECAO)), '') IS NOT NULL
           AND ISNULL(P.INATIVO, 0) = 0
           AND ISNULL(C.INATIVO, 0) = 0
           AND P.GRIFFE IN ('K&J BLACK', 'KING&JOE', 'KING&JOE PLAY')
@@ -51,8 +53,10 @@ public class LinxIntegrationService {
     private static final String COLECOES_VALIDAS_FROM_WHERE = """
         FROM dbo.PRODUTOS AS P
         INNER JOIN dbo.COLECOES AS C ON C.COLECAO = P.COLECAO
+          OR (C.GRIFFE = P.GRIFFE AND EXISTS (SELECT 1 FROM dbo.PRODUTO_FICHA_VERSAO H
+              WHERE H.PRODUTO=P.PRODUTO AND H.U_COLECAO=C.COLECAO))
         WHERE NULLIF(RTRIM(LTRIM(P.PRODUTO)), '') IS NOT NULL
-          AND NULLIF(RTRIM(LTRIM(P.COLECAO)), '') IS NOT NULL
+          AND NULLIF(RTRIM(LTRIM(C.COLECAO)), '') IS NOT NULL
           AND ISNULL(P.INATIVO, 0) = 0
           AND ISNULL(C.INATIVO, 0) = 0
           AND UPPER(RTRIM(LTRIM(P.GRUPO_PRODUTO))) = 'ROUPAS'
@@ -200,7 +204,7 @@ public class LinxIntegrationService {
             params.addValue("griffes", griffeFilters);
         }
         if (!colecaoFilters.isEmpty()) {
-            filters.append(" AND RTRIM(LTRIM(P.COLECAO)) IN (:colecoes)");
+            filters.append(" AND RTRIM(LTRIM(C.COLECAO)) IN (:colecoes)");
             params.addValue("colecoes", colecaoFilters);
         }
         if (searchFilter != null) {
@@ -257,7 +261,7 @@ public class LinxIntegrationService {
                     P.ID,
                     REPLACE(REPLACE(UPPER(RTRIM(LTRIM(P.PRODUTO))), '.', ''), ' ', '') AS CODIGO_NORMALIZADO
                 """ + filters + """
-                 ORDER BY P.GRIFFE, P.COLECAO, P.PRODUTO, P.ID
+                 ORDER BY P.GRIFFE, C.COLECAO, P.PRODUTO, P.ID
                 """;
             List<LinxProductKey> matchingKeys = jdbc.query(
                 keysSql,
@@ -299,7 +303,7 @@ public class LinxIntegrationService {
                 REPLACE(REPLACE(UPPER(RTRIM(LTRIM(P.PRODUTO))), '.', ''), ' ', '') AS CODIGO_NORMALIZADO,
                 RTRIM(LTRIM(P.DESC_PRODUTO)) AS DESCRICAO,
                 RTRIM(LTRIM(P.GRIFFE)) AS GRIFFE,
-                RTRIM(LTRIM(P.COLECAO)) AS COLECAO_CODIGO,
+                RTRIM(LTRIM(C.COLECAO)) AS COLECAO_CODIGO,
                 RTRIM(LTRIM(C.DESC_COLECAO)) AS COLECAO_NOME,
                 NULLIF(RTRIM(LTRIM(C.GRIFFE)), '') AS GRIFFE_COLECAO,
                 C.DATA_INICIO_META,
@@ -328,7 +332,7 @@ public class LinxIntegrationService {
                 P.CUSTO_REPOSICAO1,
                 P.PRECO_REPOSICAO_1
             """ + filters + workflowPageFilter + """
-             ORDER BY P.GRIFFE, P.COLECAO, P.PRODUTO, P.ID
+             ORDER BY P.GRIFFE, C.COLECAO, P.PRODUTO, P.ID
             """ + pagination;
 
         List<LinxProdutoValidoResponseDTO> items = jdbc.query(dataSql, params, this::mapProdutoValido);
@@ -435,7 +439,7 @@ public class LinxIntegrationService {
                 REPLACE(REPLACE(UPPER(RTRIM(LTRIM(P.PRODUTO))), '.', ''), ' ', '') AS CODIGO_NORMALIZADO,
                 RTRIM(LTRIM(P.DESC_PRODUTO)) AS DESCRICAO,
                 RTRIM(LTRIM(P.GRIFFE)) AS GRIFFE,
-                RTRIM(LTRIM(P.COLECAO)) AS COLECAO_CODIGO,
+                RTRIM(LTRIM(C.COLECAO)) AS COLECAO_CODIGO,
                 RTRIM(LTRIM(C.DESC_COLECAO)) AS COLECAO_NOME,
                 NULLIF(RTRIM(LTRIM(C.GRIFFE)), '') AS GRIFFE_COLECAO,
                 C.DATA_INICIO_META,
@@ -651,6 +655,18 @@ public class LinxIntegrationService {
     /** Cores disponíveis para o mostruário, lidas diretamente do cadastro Linx. */
     public List<String> getCoresMostruario() {
         return getCoresCatalogo();
+    }
+
+    /** Mesmo catálogo completo, mantendo a identidade da cor; não deduz COR_PRODUTO. */
+    public List<LinxCorCodigoDTO> getCoresMostruarioComCodigo() {
+        requireExpectedDatabase();
+        return jdbc.query("""
+            SELECT COR, DESC_COR FROM dbo.CORES_BASICAS
+            WHERE NULLIF(LTRIM(RTRIM(COR)), '') IS NOT NULL
+              AND NULLIF(LTRIM(RTRIM(DESC_COR)), '') IS NOT NULL
+            ORDER BY DESC_COR, COR
+            """, new MapSqlParameterSource(),
+            (rs, rowNum) -> new LinxCorCodigoDTO(clean(rs.getString("COR")), clean(rs.getString("DESC_COR"))));
     }
 
     public List<String> getGrades() {

@@ -16,6 +16,21 @@ import org.springframework.http.HttpStatus;
 class LinxIntegrationControllerTest {
 
     @Test
+    void expoeMostruarioComCodigoSomentePorGet() throws Exception {
+        var service = mock(LinxIntegrationService.class);
+        when(service.getCoresMostruarioComCodigo()).thenReturn(List.of(new LinxCorCodigoDTO("00003", "PRETO")));
+        var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
+            .standaloneSetup(new LinxIntegrationController(Optional.of(service))).build();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/linx/cores-mostruario/codigos"))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].codigo").value("00003"))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[0].descricao").value("PRETO"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/linx/cores-mostruario/codigos"))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isMethodNotAllowed());
+        verify(service).getCoresMostruarioComCodigo();
+    }
+
+    @Test
     void informaServiceUnavailableQuandoIntegracaoNaoFoiConfigurada() {
         LinxIntegrationController controller = new LinxIntegrationController(Optional.empty());
 

@@ -9,7 +9,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
  */
 public final class LinxDatabaseClient implements AutoCloseable {
 
-    public static final String REQUIRED_DATABASE = "HOMOLOGACAO_COBRANCA";
+    public static final String REQUIRED_DATABASE = "HOMOLOGACAO_ATUAL";
 
     private final HikariDataSource dataSource;
     private final NamedParameterJdbcTemplate jdbc;

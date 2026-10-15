@@ -22,8 +22,18 @@ public final class LinxHomologConnectionValidator {
 
     public static void validateBeforePool(LinxDataSourceProperties properties) {
         if (!properties.isHomolog6Only()) return;
-        if (!HOMOLOG_DATABASE.equals(properties.getExpectedDatabase())) {
-            throw invalid("O banco esperado deve ser HOMOLOG_COBRANCA.");
+        validateFixedTarget(properties,HOMOLOG_DATABASE,AUTHORITY);
+    }
+
+    /** Destino de leitura confirmado em 15/10/2026; não amplia a permissão do gravador .6. */
+    public static void validateAtualBeforePool(LinxDataSourceProperties properties) {
+        if (properties.isHomolog6Only()) return;
+        validateFixedTarget(properties,"HOMOLOGACAO_ATUAL","jdbc:sqlserver://192.168.1.3:1433");
+    }
+
+    private static void validateFixedTarget(LinxDataSourceProperties properties,String database,String authority) {
+        if (!database.equals(properties.getExpectedDatabase())) {
+            throw invalid("O banco esperado deve ser " + database + ".");
         }
         var source = properties.getDatasource();
         if (!MICROSOFT_DRIVER.equals(source.getDriverClassName())) {
@@ -37,8 +47,8 @@ public final class LinxHomologConnectionValidator {
             throw invalid("URL ausente ou sintaxe ambígua; escapes e espaços não são aceitos.");
         }
         String[] segments = url.split(";", -1);
-        if (!AUTHORITY.equals(segments[0])) {
-            throw invalid("Use apenas o endereço literal 192.168.1.6:1433.");
+        if (!authority.equals(segments[0])) {
+            throw invalid("O endereço literal não corresponde ao destino homologado.");
         }
         Map<String, String> values = new HashMap<>();
         for (int index = 1; index < segments.length; index++) {
@@ -60,8 +70,8 @@ public final class LinxHomologConnectionValidator {
                 throw invalid("Propriedades duplicadas não são aceitas, inclusive com caixa diferente.");
             }
         }
-        if (!HOMOLOG_DATABASE.equals(values.get("databasename"))) {
-            throw invalid("databaseName deve apontar explicitamente para HOMOLOG_COBRANCA.");
+        if (!database.equals(values.get("databasename"))) {
+            throw invalid("databaseName deve apontar explicitamente para " + database + ".");
         }
         if (!"true".equalsIgnoreCase(values.get("encrypt"))) {
             throw invalid("encrypt=true é obrigatório.");
@@ -75,6 +85,6 @@ public final class LinxHomologConnectionValidator {
     }
 
     private static IllegalStateException invalid(String reason) {
-        return new IllegalStateException("Conexão Linx homolog6 bloqueada antes do pool. " + reason);
+        return new IllegalStateException("Conexão Linx homologação bloqueada antes do pool. " + reason);
     }
 }

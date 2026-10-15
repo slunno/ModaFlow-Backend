@@ -16,10 +16,21 @@ server:
     context-path: /api/v1
 
 modaflow:
+  linx-write:
+    # Opt-in independente: trocar o leitor não habilita escrita nem herda credenciais.
+    enabled: ${MODAFLOW_LINX_WRITE_ENABLED:false}
+    review-enabled: ${MODAFLOW_LINX_WRITE_REVIEW_ENABLED:false}
+    homolog-atual3: ${MODAFLOW_LINX_WRITE_HOMOLOG_ATUAL3:true}
+    approved-schema-sha256: ${MODAFLOW_LINX_WRITE_APPROVED_SCHEMA_SHA256:}
+    datasource:
+      url: ${MODAFLOW_LINX_WRITE_URL:}
+      username: ${MODAFLOW_LINX_WRITE_USERNAME:}
+      password: ${MODAFLOW_LINX_WRITE_PASSWORD:}
   linx:
     enabled: ${MODAFLOW_LINX_ENABLED:false}
     # Aceita a conta administrativa informada, mas a integração continua expondo
-    # apenas consultas e valida DB_NAME() = HOMOLOGACAO_COBRANCA antes de usá-la.
+    # apenas consultas e valida o destino homologado antes de usá-la.
+    expected-database: ${MODAFLOW_LINX_EXPECTED_DATABASE:HOMOLOGACAO_ATUAL}
     allow-write-capable-credential: ${MODAFLOW_LINX_ALLOW_WRITE_CAPABLE_CREDENTIAL:true}
     datasource:
       url: ${MODAFLOW_LINX_DATASOURCE_URL:}

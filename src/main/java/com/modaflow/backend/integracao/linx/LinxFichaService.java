@@ -41,6 +41,19 @@ public class LinxFichaService {
 
     private static final String COLLECTION_SCOPE = " AND H.U_COLECAO = :colecao AND C.GRIFFE = :griffe AND RTRIM(LTRIM(C.DESC_COLECAO)) = :descColecao ";
 
+    public List<LinxFichaReferenciaDTO> getReferencias(String produto,String griffe) {
+        integration.requireExpectedDatabase();
+        return jdbc.query("""
+            SELECT H.PRODUTO,H.VERSAO_FICHA,H.DESC_VERSAO_FICHA,H.DATA_CRIACAO,H.RESPONSAVEL,
+              H.STATUS_VERSAO_FICHA,H.U_COLECAO,C.DESC_COLECAO,P.GRADE
+            FROM dbo.PRODUTO_FICHA_VERSAO H JOIN dbo.PRODUTOS P ON P.PRODUTO=H.PRODUTO
+            JOIN dbo.COLECOES C ON C.COLECAO=H.U_COLECAO
+            WHERE H.PRODUTO=:produto AND P.GRIFFE=:griffe AND C.GRIFFE=:griffe
+              AND P.GRUPO_PRODUTO='ROUPAS' AND ISNULL(P.INATIVO,0)=0 AND ISNULL(C.INATIVO,0)=0
+            ORDER BY H.DATA_CRIACAO DESC,H.VERSAO_FICHA DESC
+            """,params(produto,griffe),(row,index) -> new LinxFichaReferenciaDTO(mapHeader(row,index),text(row.getString("GRADE"))));
+    }
+
     /** Apenas vínculos do produto atualmente pertencente à coleção/griffe informadas. */
     public List<LinxCorProdutoDTO> getCoresProduto(String produto, String griffe, String colecao, String descColecao) {
         var params = collectionParams(produto, griffe, colecao, descColecao);
@@ -77,16 +90,20 @@ public class LinxFichaService {
         return getMateriais(headers.getFirst(), params);
     }
 
-    /** Base antiga: somente uma ficha atual, sem carregar a lista de versões anteriores. */
+    /** A versão atual é da coleção aberta, não o ponteiro global de PRODUTOS. */
     public LinxFichaDetalheDTO getAtual(String produto, String griffe, String colecao, String descColecao) {
         integration.requireExpectedDatabase();
         var params = collectionParams(produto, griffe, colecao, descColecao);
         var headers = jdbc.query(HEADERS.formatted("TOP (1)") + """
-            AND (H.U_COLECAO = :colecao OR NULLIF(LTRIM(RTRIM(H.U_COLECAO)), '') IS NULL)
-            AND EXISTS (SELECT 1 FROM dbo.PRODUTOS P INNER JOIN dbo.COLECOES PC ON PC.COLECAO = P.COLECAO
+            AND ((H.U_COLECAO = :colecao AND C.GRIFFE = :griffe
+                  AND RTRIM(LTRIM(C.DESC_COLECAO)) = :descColecao)
+              OR (NULLIF(LTRIM(RTRIM(H.U_COLECAO)), '') IS NULL
+                AND NOT EXISTS (SELECT 1 FROM dbo.PRODUTO_FICHA_VERSAO E
+                                WHERE E.PRODUTO = H.PRODUTO AND E.U_COLECAO = :colecao)
+                AND EXISTS (SELECT 1 FROM dbo.PRODUTOS P INNER JOIN dbo.COLECOES PC ON PC.COLECAO = P.COLECAO
                         WHERE P.PRODUTO = H.PRODUTO AND P.VERSAO_FICHA = H.VERSAO_FICHA AND P.COLECAO = :colecao
                           AND P.GRIFFE = :griffe AND PC.GRIFFE = :griffe
-                          AND RTRIM(LTRIM(PC.DESC_COLECAO)) = :descColecao)
+                          AND RTRIM(LTRIM(PC.DESC_COLECAO)) = :descColecao)))
             ORDER BY H.DATA_CRIACAO DESC, H.VERSAO_FICHA DESC
             """, params, this::mapHeader);
         if (headers.isEmpty()) throw new ResourceNotFoundException("Nenhuma ficha atual encontrada para a peça desta coleção.");
@@ -154,11 +171,14 @@ public class LinxFichaService {
         var rows = jdbc.queryForList("""
             SELECT H.PRODUTO, H.VERSAO_FICHA, M.GRUPO, M.MATERIAL, M.DESC_MATERIAL
             FROM dbo.PRODUTOS P
-            INNER JOIN dbo.COLECOES C ON C.COLECAO = P.COLECAO
+            INNER JOIN dbo.COLECOES C ON C.COLECAO = :colecao
             CROSS APPLY (
                 SELECT TOP (1) V.PRODUTO, V.VERSAO_FICHA FROM dbo.PRODUTO_FICHA_VERSAO V
                 WHERE V.PRODUTO = P.PRODUTO AND (V.U_COLECAO = C.COLECAO
-                    OR (:legado = 1 AND NULLIF(LTRIM(RTRIM(V.U_COLECAO)), '') IS NULL))
+                    OR (:legado = 1 AND P.COLECAO = C.COLECAO AND P.VERSAO_FICHA = V.VERSAO_FICHA
+                        AND NULLIF(LTRIM(RTRIM(V.U_COLECAO)), '') IS NULL
+                        AND NOT EXISTS (SELECT 1 FROM dbo.PRODUTO_FICHA_VERSAO E
+                                        WHERE E.PRODUTO = P.PRODUTO AND E.U_COLECAO = C.COLECAO)))
                 ORDER BY V.DATA_CRIACAO DESC, V.VERSAO_FICHA DESC
             ) H
             LEFT JOIN dbo.PRODUTO_VERSAO_MATERIAL VM ON VM.PRODUTO = H.PRODUTO AND VM.VERSAO_FICHA = H.VERSAO_FICHA

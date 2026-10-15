@@ -111,7 +111,7 @@ class LinxHomologConnectionValidatorTest {
         var properties = new LinxDataSourceProperties();
         assertThat(properties.isEnabled()).isFalse();
         assertThat(properties.isHomolog6Only()).isFalse();
-        assertThat(properties.getExpectedDatabase()).isEqualTo("HOMOLOGACAO_COBRANCA");
+        assertThat(properties.getExpectedDatabase()).isEqualTo("HOMOLOGACAO_ATUAL");
         assertThatCode(() -> LinxHomologConnectionValidator.validateBeforePool(properties))
             .doesNotThrowAnyException();
     }
@@ -121,7 +121,7 @@ class LinxHomologConnectionValidatorTest {
         HikariDataSource source = mock(HikariDataSource.class);
         var legacy = new LinxDatabaseClient(source, true);
         var homolog = new LinxDatabaseClient(source, true, "HOMOLOG_COBRANCA");
-        assertThat(legacy.expectedDatabase()).isEqualTo("HOMOLOGACAO_COBRANCA");
+        assertThat(legacy.expectedDatabase()).isEqualTo("HOMOLOGACAO_ATUAL");
         assertThat(homolog.expectedDatabase()).isEqualTo("HOMOLOG_COBRANCA");
         verifyNoInteractions(source);
     }

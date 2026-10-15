@@ -1,0 +1,13 @@
+# NÃO carregado automaticamente. Somente após revisão e aprovação dos testes de escrita.
+# Não reutiliza a configuração do leitor, não aponta ao .3 e não cria tabelas de rascunho.
+modaflow:
+  linx-write:
+    enabled: false
+    review-enabled: false # true permite apenas a revisão por SELECT, sem liberar o POST de escrita
+    approved-schema-sha256: '' # hash do retrato de dependências revisado, obtido por SELECT
+    tenant-griffes: {} # IDs reais de marcas do portal -> código GRIFFE; sem inferência pelo nome
+    allowed-user-ids: [] # IDs de usuários autorizados a testar escrita, além do acesso à marca
+    datasource:
+      url: jdbc:sqlserver://192.168.1.6:1433;databaseName=HOMOLOG_COBRANCA;encrypt=true;trustServerCertificate=true
+      username: ${MODAFLOW_LINX_WRITE_USERNAME:}
+      password: ${MODAFLOW_LINX_WRITE_PASSWORD:}

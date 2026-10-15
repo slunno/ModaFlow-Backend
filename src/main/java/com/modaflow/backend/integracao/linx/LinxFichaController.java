@@ -40,6 +40,10 @@ public class LinxFichaController {
                                              @RequestParam String colecao, @RequestParam String descColecao) {
         return service().getVersoes(produto, griffe, colecao, descColecao);
     }
+    @GetMapping("/produtos/{produto}/referencias")
+    public List<LinxFichaReferenciaDTO> getReferencias(@PathVariable String produto,@RequestParam String griffe) {
+        return service().getReferencias(produto,griffe);
+    }
     @GetMapping("/produtos/{produto}/fichas/{versao}")
     public LinxFichaDetalheDTO getDetalhe(@PathVariable String produto, @PathVariable String versao, @RequestParam String griffe,
                                         @RequestParam String colecao, @RequestParam String descColecao) {

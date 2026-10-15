@@ -132,6 +132,11 @@ public class LinxIntegrationController {
         return ResponseEntity.ok(service().getCoresMostruario());
     }
 
+    @GetMapping("/cores-mostruario/codigos")
+    public ResponseEntity<List<LinxCorCodigoDTO>> getCoresMostruarioComCodigo() {
+        return ResponseEntity.ok(service().getCoresMostruarioComCodigo());
+    }
+
     @GetMapping("/grades")
     public ResponseEntity<List<String>> getGrades() {
         return ResponseEntity.ok(service().getGrades());

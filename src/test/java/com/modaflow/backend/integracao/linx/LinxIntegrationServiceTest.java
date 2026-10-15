@@ -387,8 +387,16 @@ class LinxIntegrationServiceTest {
         );
 
         assertThat(countSql.getValue()).contains("C.COLECAO = P.COLECAO", "P.GRIFFE IN");
-        assertThat(dataSql.getValue()).contains("P.STATUS_PRODUTO", "OFFSET :offset");
-        assertThat(dataSql.getValue()).doesNotContain(
+        assertThat(dataSql.getValue()).contains(
+            "P.STATUS_PRODUTO", "OFFSET :offset", "RTRIM(LTRIM(C.COLECAO)) AS COLECAO_CODIGO"
+        );
+        // A griffe restringe apenas o vínculo histórico alternativo. O vínculo
+        // direto da coleção continua aceitando produtos sem griffe na coleção.
+        assertThat(dataSql.getValue()).containsPattern(
+            "ON C\\.COLECAO = P\\.COLECAO\\s+OR \\(C\\.GRIFFE = P\\.GRIFFE AND EXISTS"
+        );
+        String productFilters = dataSql.getValue().substring(dataSql.getValue().indexOf("WHERE NULLIF"));
+        assertThat(productFilters).doesNotContain(
             "P.STATUS_PRODUTO =",
             "P.TIPO_STATUS_PRODUTO =",
             "C.GRIFFE = P.GRIFFE",
@@ -431,8 +439,9 @@ class LinxIntegrationServiceTest {
 
         assertThat(countSql.getValue())
             .contains("P.SUBGRUPO_PRODUTO", "dbo.MATERIAIS AS MF")
-            .doesNotContain("P.TIPO_PRODUTO")
-            .doesNotContain("C.GRIFFE = P.GRIFFE");
+            .doesNotContain("P.TIPO_PRODUTO");
+        String productFilters = countSql.getValue().substring(countSql.getValue().indexOf("WHERE NULLIF"));
+        assertThat(productFilters).doesNotContain("C.GRIFFE = P.GRIFFE");
         assertThat(parameters.getValue().getValue("tipos")).isEqualTo(List.of("BERMUDA"));
         assertThat(parameters.getValue().getValue("material")).isEqualTo("%CETIM\\_100\\%%");
     }

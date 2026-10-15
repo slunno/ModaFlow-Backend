@@ -17,6 +17,7 @@ public class LinxDataSourceConfig {
         LinxDataSourceProperties.DataSource source = properties.getDatasource();
         // Validação puramente local: deve preceder até a construção do pool.
         LinxHomologConnectionValidator.validateBeforePool(properties);
+        LinxHomologConnectionValidator.validateAtualBeforePool(properties);
         String sourcePrefix = properties.isHomolog6Only()
             ? "MODAFLOW_LINX_HOMOLOG6_DATASOURCE_" : "MODAFLOW_LINX_DATASOURCE_";
         requireText(source.getUrl(), sourcePrefix + "URL");
